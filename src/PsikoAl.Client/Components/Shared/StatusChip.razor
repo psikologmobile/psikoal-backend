@@ -48,5 +48,14 @@
         ["draft"] = new("neutral", "Taslak"),
         ["published"] = new("success", "Yayında"),
         ["scheduled"] = new("info", "Planlandı"),
+
+        // Fiyatlandırma dönemi (Pricing.razor türetir: geçerli / planlandı / geçmiş)
+        ["current"] = new("success", "Geçerli"),
+        ["past"] = new("neutral", "Geçmiş"),
+
+        // Anlaşma bildirimi (ClaimStatuses). OPEN ilan durumuyla çakıştığı için ayrı anahtar.
+        ["claim_open"] = new("info", "Açık"),
+        ["REVIEW_PENDING"] = new("warning", "İnceleme bekliyor"),
+        ["RESOLVED"] = new("success", "Çözüldü"),
     };
 }

@@ -116,6 +116,56 @@ public interface IAdminClientService
         CancellationToken cancellationToken);
 
     Task<AdminApiResult> DeleteBlogAsync(Guid blogId, CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminPagedResultDto<AdminPricingPeriodDto>>> ListPricingPeriodsAsync(
+        int page,
+        int perPage,
+        CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminPricingPeriodDto>> CreatePricingPeriodAsync(CreatePricingPeriodDto request, CancellationToken cancellationToken);
+
+    Task<AdminApiResult<PricingPreviewResultDto>> PreviewPricingAsync(PricingPreviewRequestDto request, CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminPagedResultDto<AdminWalletPaymentDto>>> ListWalletPaymentsAsync(
+        AdminWalletPaymentQueryDto query,
+        CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminWalletPaymentDto>> UploadInvoiceAsync(
+        Guid paymentId,
+        byte[] content,
+        string fileName,
+        CancellationToken cancellationToken);
+
+    Task<AdminApiResult<string>> GetInvoiceUrlAsync(Guid paymentId, CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminExpertWalletDto>> GetExpertWalletAsync(
+        Guid expertId,
+        int page,
+        int perPage,
+        CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminExpertWalletDto>> GiftExpertWalletAsync(
+        Guid expertId,
+        AdminWalletGiftDto request,
+        CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminExpertWalletDto>> AdjustExpertWalletAsync(
+        Guid expertId,
+        AdminWalletAdjustDto request,
+        CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminPagedResultDto<AdminClaimDto>>> ListClaimsAsync(AdminClaimQueryDto query, CancellationToken cancellationToken);
+
+    Task<AdminApiResult> ResolveClaimAsync(Guid claimId, string note, CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminPagedResultDto<AdminReferralDto>>> ListReferralsAsync(
+        AdminReferralQueryDto query,
+        CancellationToken cancellationToken);
+
+    Task<AdminApiResult<AdminPagedResultDto<AdminActivityItemDto>>> ListUserActivityAsync(
+        Guid userId,
+        AdminActivityQueryDto query,
+        CancellationToken cancellationToken);
 }
 
 public sealed record AdminExpertDocumentUrls(string? CvUrl, IReadOnlyList<string> CertificateUrls);

@@ -1,0 +1,449 @@
+@* Uzmanın TL bakiyesi, ücretsiz teklif hakları, defteri; hediye ve düzeltme (REVIZE-2 §9).
+   Finans uçlarını çağırır: yalnız AdminRoleGroups.Finance'teki rollere gösterilir
+   (çağıran sayfa kontrol eder; uç zaten 403 döner). *@
+@inject IAdminClientService AdminClient
+
+<div class="stack-3" data-testid="expert-wallet-panel">
+    @if (_errorMessage is not null)
+    {
+        <Alert Variant="AlertVariant.Destructive">
+            <AlertDescription>@_errorMessage</AlertDescription>
+        </Alert>
+    }
+
+    @if (_infoMessage is not null)
+    {
+        <Alert>
+            <AlertDescription>@_infoMessage</AlertDescription>
+        </Alert>
+    }
+
+    @if (_isLoading && _wallet is null)
+    {
+        <LoadingSkeleton />
+    }
+    else if (_wallet is not null)
+    {
+        <div class="wallet-summary">
+            <div class="wallet-figures">
+                <div>
+                    <span class="muted">Bakiye</span>
+                    <div class="text-2xl font-semibold" data-testid="expert-wallet-balance">@_wallet.BalanceLabel</div>
+                </div>
+                <div>
+                    <span class="muted">Ücretsiz teklif hakkı</span>
+                    <div class="text-2xl font-semibold" data-testid="expert-wallet-rights">@_wallet.FreeOfferRights</div>
+                </div>
+                <div>
+                    <span class="muted">Davet kodu</span>
+                    <div class="font-mono">@_wallet.ReferralCode</div>
+                </div>
+            </div>
+            <div class="detail-actions">
+                <Button Size="ButtonSize.Sm" data-testid="expert-wallet-gift" OnClick="OpenGift">Hediye</Button>
+                <Button Size="ButtonSize.Sm" Variant="ButtonVariant.Outline" data-testid="expert-wallet-adjust" OnClick="OpenAdjust">Düzeltme</Button>
+            </div>
+        </div>
+
+        @if (_wallet.Transactions.Data.Count == 0)
+        {
+            <EmptyState Title="Hareket yok" Description="Bu uzmanın cüzdanında henüz yükleme, harcama ya da hak hareketi yok." />
+        }
+        else
+        {
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Zaman</TableHead>
+                        <TableHead>Tür</TableHead>
+                        <TableHead Class="text-right">Tutar</TableHead>
+                        <TableHead Class="text-right">Hak</TableHead>
+                        <TableHead Class="text-right">Sonraki bakiye</TableHead>
+                        <TableHead>Açıklama</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    @foreach (var row in _wallet.Transactions.Data)
+                    {
+                        <TableRow>
+                            <TableCell Class="text-muted-foreground">@AdminFormat.DateTime(row.CreatedAt)</TableCell>
+                            <TableCell>@row.TypeLabel</TableCell>
+                            <TableCell Class="text-right font-medium">@Dash(row.AmountLabel)</TableCell>
+                            <TableCell Class="text-right">@Dash(row.FreeRightsLabel)</TableCell>
+                            <TableCell Class="text-right">
+                                @row.BalanceAfterLabel
+                                <div class="muted">@row.FreeRightsAfter hak</div>
+                            </TableCell>
+                            <TableCell>
+                                @row.Description
+                                @if (row.AdminName is not null)
+                                {
+                                    <div class="muted">@row.AdminName</div>
+                                }
+                            </TableCell>
+                        </TableRow>
+                    }
+                </TableBody>
+            </Table>
+            <Pager Meta="_wallet.Transactions.Meta" Disabled="_isLoading" OnPageChanged="GoToPageAsync" />
+        }
+    }
+</div>
+
+<Dialog Open="_isGiftOpen" OpenChanged="value => _isGiftOpen = value">
+    <DialogContent Size="DialogSize.Md">
+        <DialogHeader>
+            <DialogTitle>Hediye</DialogTitle>
+            <DialogDescription>
+                Bakiye (TL) ve/veya ücretsiz teklif hakkı ekler; en az biri sıfırdan büyük olmalı. Uzmana bildirim gider,
+                işlem denetim kaydına yazılır. Tek işlemde en çok ₺100.000 ve @WalletFieldLimits.AdminMaxFreeRights hak.
+            </DialogDescription>
+        </DialogHeader>
+
+        <div class="form-grid">
+            <div class="field">
+                <Label>Bakiye (₺)</Label>
+                <Input data-testid="expert-wallet-gift-amount" Placeholder="ör. 500" @bind-Value="_giftAmount" />
+            </div>
+            <div class="field">
+                <Label>Ücretsiz teklif hakkı</Label>
+                <Input Type="number" data-testid="expert-wallet-gift-rights" Placeholder="ör. 2" @bind-Value="_giftRights" />
+            </div>
+        </div>
+        <div class="field">
+            <Label>Gerekçe (isteğe bağlı)</Label>
+            <Textarea Rows="3" data-testid="expert-wallet-gift-reason" Placeholder="Kampanya, telafi..." @bind-Value="_giftReason" />
+        </div>
+        @if (GiftError is { } giftError)
+        {
+            <p class="field-error">@giftError</p>
+        }
+
+        <DialogFooter>
+            <Button Variant="ButtonVariant.Outline" OnClick="() => _isGiftOpen = false">Vazgeç</Button>
+            <Button Disabled="@(ParsedGift is null)" OnClick="AskGiftConfirm">Devam</Button>
+        </DialogFooter>
+    </DialogContent>
+</Dialog>
+
+<Dialog Open="_isAdjustOpen" OpenChanged="value => _isAdjustOpen = value">
+    <DialogContent Size="DialogSize.Md">
+        <DialogHeader>
+            <DialogTitle>Düzeltme</DialogTitle>
+            <DialogDescription>
+                İşaretli tutar: pozitif ekler, negatif düşer (ör. -625). Bakiye ve hak eksiye düşemez.
+                Gerekçe zorunludur; uzmanın hareket geçmişinde ve denetim kaydında görünür.
+            </DialogDescription>
+        </DialogHeader>
+
+        <div class="form-grid">
+            <div class="field">
+                <Label>Tutar (₺, işaretli)</Label>
+                <Input data-testid="expert-wallet-adjust-amount" Placeholder="ör. -625 ya da 250" @bind-Value="_adjustAmount" />
+            </div>
+            <div class="field">
+                <Label>Hak değişimi (işaretli)</Label>
+                <Input Type="number" data-testid="expert-wallet-adjust-rights" Placeholder="ör. -1" @bind-Value="_adjustRights" />
+            </div>
+        </div>
+        <div class="field">
+            <Label>Gerekçe</Label>
+            <Textarea Rows="3" data-testid="expert-wallet-adjust-reason" Placeholder="Mükerrer yükleme, hatalı düşüm..." @bind-Value="_adjustReason" />
+        </div>
+        @if (AdjustError is { } adjustError)
+        {
+            <p class="field-error">@adjustError</p>
+        }
+
+        <DialogFooter>
+            <Button Variant="ButtonVariant.Outline" OnClick="() => _isAdjustOpen = false">Vazgeç</Button>
+            <Button Disabled="@(ParsedAdjust is null)" OnClick="AskAdjustConfirm">Devam</Button>
+        </DialogFooter>
+    </DialogContent>
+</Dialog>
+
+<ConfirmDialog Open="_isConfirmOpen"
+               OpenChanged="value => _isConfirmOpen = value"
+               Title="@(_pendingIsGift ? "Hediyeyi onaylayın" : "Düzeltmeyi onaylayın")"
+               Description="@ConfirmText"
+               ConfirmLabel="Uygula"
+               OnConfirm="ApplyConfirmedAsync" />
+
+@code {
+    private const int PerPage = 20;
+
+    [Parameter, EditorRequired]
+    public Guid ExpertId { get; set; }
+
+    private AdminExpertWalletDto? _wallet;
+    private int _page = 1;
+    private bool _isLoading = true;
+    private bool _isBusy;
+    private string? _errorMessage;
+    private string? _infoMessage;
+    private Guid? _loadedExpertId;
+
+    private bool _isGiftOpen;
+    private string _giftAmount = string.Empty;
+    private string _giftRights = string.Empty;
+    private string _giftReason = string.Empty;
+
+    private bool _isAdjustOpen;
+    private string _adjustAmount = string.Empty;
+    private string _adjustRights = string.Empty;
+    private string _adjustReason = string.Empty;
+
+    private bool _isConfirmOpen;
+    private bool _pendingIsGift;
+
+    // Boş alan 0 sayılır; dolu ama okunamayan alan null (geçersiz) döner.
+    private static (bool Ok, long Kurus) ParseAmount(string value)
+        => string.IsNullOrWhiteSpace(value) ? (true, 0) : AdminFormat.ParseTryToKurus(value) is { } kurus ? (true, kurus) : (false, 0);
+
+    private static (bool Ok, int Rights) ParseRights(string value)
+        => string.IsNullOrWhiteSpace(value)
+            ? (true, 0)
+            : int.TryParse(value, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out var rights)
+                ? (true, rights)
+                : (false, 0);
+
+    private string? GiftError
+    {
+        get
+        {
+            var (amountOk, amount) = ParseAmount(_giftAmount);
+            var (rightsOk, rights) = ParseRights(_giftRights);
+            if (!amountOk || !rightsOk)
+            {
+                return "Tutar TL olarak (ör. 500 ya da 250,50), hak tam sayı olarak girilmeli.";
+            }
+
+            if (amount < 0 || rights < 0)
+            {
+                return "Hediye eksi olamaz; düşmek için Düzeltme kullanın.";
+            }
+
+            if (amount % 100 != 0)
+            {
+                return "Bakiye tam TL olmalı.";
+            }
+
+            if (amount > WalletFieldLimits.AdminMaxAmountKurus || rights > WalletFieldLimits.AdminMaxFreeRights)
+            {
+                return "Tek işlem üst sınırı aşıldı.";
+            }
+
+            return null;
+        }
+    }
+
+    private AdminWalletGiftDto? ParsedGift
+    {
+        get
+        {
+            if (GiftError is not null)
+            {
+                return null;
+            }
+
+            var (_, amount) = ParseAmount(_giftAmount);
+            var (_, rights) = ParseRights(_giftRights);
+            return amount == 0 && rights == 0
+                ? null
+                : new AdminWalletGiftDto(amount, rights, string.IsNullOrWhiteSpace(_giftReason) ? null : _giftReason.Trim());
+        }
+    }
+
+    private string? AdjustError
+    {
+        get
+        {
+            var (amountOk, amount) = ParseAmount(_adjustAmount);
+            var (rightsOk, rights) = ParseRights(_adjustRights);
+            if (!amountOk || !rightsOk)
+            {
+                return "Tutar TL olarak (ör. -625), hak tam sayı olarak girilmeli.";
+            }
+
+            if (amount % 100 != 0)
+            {
+                return "Tutar tam TL olmalı.";
+            }
+
+            if (Math.Abs(amount) > WalletFieldLimits.AdminMaxAmountKurus || Math.Abs(rights) > WalletFieldLimits.AdminMaxFreeRights)
+            {
+                return "Tek işlem üst sınırı aşıldı.";
+            }
+
+            if (_adjustReason.Trim().Length > WalletFieldLimits.ReasonMaxLength)
+            {
+                return $"Gerekçe en çok {WalletFieldLimits.ReasonMaxLength} karakter olabilir.";
+            }
+
+            return null;
+        }
+    }
+
+    private AdminWalletAdjustDto? ParsedAdjust
+    {
+        get
+        {
+            if (AdjustError is not null || string.IsNullOrWhiteSpace(_adjustReason))
+            {
+                return null;
+            }
+
+            var (_, amount) = ParseAmount(_adjustAmount);
+            var (_, rights) = ParseRights(_adjustRights);
+            return amount == 0 && rights == 0 ? null : new AdminWalletAdjustDto(amount, rights, _adjustReason.Trim());
+        }
+    }
+
+    private string ConfirmText
+    {
+        get
+        {
+            if (_pendingIsGift && ParsedGift is { } gift)
+            {
+                return $"{Describe(gift.AmountKurus, gift.FreeRights)} hediye edilecek.";
+            }
+
+            if (!_pendingIsGift && ParsedAdjust is { } adjust)
+            {
+                return $"{Describe(adjust.AmountKurus, adjust.FreeRightsDelta)} uygulanacak. Gerekçe: {adjust.Reason}";
+            }
+
+            return string.Empty;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedExpertId != ExpertId)
+        {
+            _loadedExpertId = ExpertId;
+            _page = 1;
+            _wallet = null;
+            _infoMessage = null;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var result = await AdminClient.GetExpertWalletAsync(ExpertId, _page, PerPage, CancellationToken.None);
+            _wallet = result.Value ?? _wallet;
+            _errorMessage = result.ErrorMessage;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _page = page;
+        return LoadAsync();
+    }
+
+    private void OpenGift()
+    {
+        _giftAmount = _giftRights = _giftReason = string.Empty;
+        _isGiftOpen = true;
+    }
+
+    private void OpenAdjust()
+    {
+        _adjustAmount = _adjustRights = _adjustReason = string.Empty;
+        _isAdjustOpen = true;
+    }
+
+    private void AskGiftConfirm()
+    {
+        if (ParsedGift is null)
+        {
+            return;
+        }
+
+        _pendingIsGift = true;
+        _isGiftOpen = false;
+        _isConfirmOpen = true;
+    }
+
+    private void AskAdjustConfirm()
+    {
+        if (ParsedAdjust is null)
+        {
+            return;
+        }
+
+        _pendingIsGift = false;
+        _isAdjustOpen = false;
+        _isConfirmOpen = true;
+    }
+
+    private async Task ApplyConfirmedAsync()
+    {
+        _isConfirmOpen = false;
+        if (_isBusy)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = _infoMessage = null;
+        try
+        {
+            AdminApiResult<AdminExpertWalletDto> result;
+            string success;
+            if (_pendingIsGift && ParsedGift is { } gift)
+            {
+                result = await AdminClient.GiftExpertWalletAsync(ExpertId, gift, CancellationToken.None);
+                success = "Hediye uygulandı; uzmana bildirim gönderildi.";
+            }
+            else if (!_pendingIsGift && ParsedAdjust is { } adjust)
+            {
+                result = await AdminClient.AdjustExpertWalletAsync(ExpertId, adjust, CancellationToken.None);
+                success = "Düzeltme uygulandı.";
+            }
+            else
+            {
+                return;
+            }
+
+            _errorMessage = result.ErrorMessage;
+            if (result.Value is { } updated)
+            {
+                _wallet = updated;
+                _page = 1;
+                _infoMessage = success;
+            }
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private static string Describe(long amountKurus, int rights)
+    {
+        var parts = new List<string>();
+        if (amountKurus != 0)
+        {
+            parts.Add($"{PsikoAl.Common.Presentation.MoneyLabel.WithSign(amountKurus)} bakiye");
+        }
+
+        if (rights != 0)
+        {
+            parts.Add($"{PsikoAl.Common.Presentation.MoneyLabel.Rights(rights)}");
+        }
+
+        return string.Join(" ve ", parts);
+    }
+
+    private static string Dash(string value) => string.IsNullOrEmpty(value) ? "—" : value;
+}

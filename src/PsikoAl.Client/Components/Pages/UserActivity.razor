@@ -1,0 +1,376 @@
+@page "/activity"
+@using System.Text
+@inject IAdminClientService AdminClient
+@inject AdminFileInterop Files
+@inject NavigationManager Navigation
+
+<PageTitle>İşlem Kaydı — PsikoAl Admin</PageTitle>
+
+<PageHeader Title="Kullanıcı İşlem Kaydı"
+            Description="Bir kişinin bütün hareketleri, en yeniden eskiye: kayıt, giriş, ilan, teklif (ödenen ücret/hak), eşleşme, bakiye hareketi, bildirim, anlaşma bildirimi ve hesabına yapılan admin işlemleri. Saatler İstanbul saatidir." />
+
+<Card Class="mb-4">
+    <CardContent Class="p-4">
+        <div class="toolbar">
+            <Input Class="toolbar-search" data-testid="activity-user-search" Placeholder="Kişi ara: e-posta veya isim..." @bind-Value="_userSearch" />
+            <Button Variant="ButtonVariant.Outline" Disabled="_isSearching" data-testid="activity-user-search-run" OnClick="SearchUsersAsync">Ara</Button>
+        </div>
+
+        @if (_userResults is { Count: 0 })
+        {
+            <p class="muted">Aramaya uyan kullanıcı yok.</p>
+        }
+        else if (_userResults is not null)
+        {
+            <div class="user-picker" data-testid="activity-user-results">
+                @foreach (var user in _userResults)
+                {
+                    <button type="button" class="user-picker-option" @onclick="() => SelectUser(user)">
+                        <span>@user.FullName <span class="muted">@user.Email</span></span>
+                        <StatusChip Status="@user.Role" />
+                    </button>
+                }
+            </div>
+        }
+
+        @if (UserId is { } selectedId)
+        {
+            <div class="detail-actions">
+                <span>Seçili kişi: <strong data-testid="activity-selected-user">@(string.IsNullOrWhiteSpace(Name) ? selectedId.ToString() : Name)</strong></span>
+            </div>
+        }
+    </CardContent>
+</Card>
+
+@if (UserId is not null)
+{
+    <div class="toolbar">
+        <Select Class="toolbar-select" data-testid="activity-kind" @bind-Value="_kind">
+            <option value="">Tüm türler</option>
+            @foreach (var (value, label) in KindOptions)
+            {
+                <option value="@value">@label</option>
+            }
+        </Select>
+        <Input Class="toolbar-select" Type="date" aria-label="Başlangıç tarihi" @bind-Value="_from" />
+        <Input Class="toolbar-select" Type="date" aria-label="Bitiş tarihi" @bind-Value="_to" />
+        <Button Disabled="_isLoading" data-testid="activity-filter" OnClick="FilterAsync">Filtrele</Button>
+        <Button Variant="ButtonVariant.Outline" Disabled="@(_isLoading || _isExporting || _items is not { Count: > 0 })"
+                data-testid="activity-export" OnClick="ExportCsvAsync">
+            @(_isExporting ? $"Dışa aktarılıyor… {_exportProgress}" : "CSV indir")
+        </Button>
+    </div>
+}
+
+@if (_errorMessage is not null)
+{
+    <Alert Variant="AlertVariant.Destructive" Class="mb-4">
+        <AlertDescription>@_errorMessage</AlertDescription>
+    </Alert>
+}
+
+@if (_infoMessage is not null)
+{
+    <Alert Class="mb-4">
+        <AlertDescription>@_infoMessage</AlertDescription>
+    </Alert>
+}
+
+<Card Class="table-card" data-testid="activity-card">
+    @if (UserId is null)
+    {
+        <EmptyState Title="Kişi seçin" Description="Yukarıdan e-posta ya da isimle arayıp bir kullanıcı seçin. Kullanıcılar sayfasındaki &quot;İşlem kaydı&quot; bağlantısı da buraya getirir." />
+    }
+    else if (_isLoading)
+    {
+        <LoadingSkeleton />
+    }
+    else if (_items is { Count: 0 })
+    {
+        <EmptyState Title="Hareket yok" Description="Seçtiğiniz tarih aralığında ve türde kayıt bulunmuyor." />
+    }
+    else if (_items is not null)
+    {
+        <ol class="timeline" data-testid="activity-timeline">
+            @foreach (var item in _items)
+            {
+                <li class="timeline-item">
+                    <span class="timeline-time">@AdminFormat.DateTimeWithSeconds(item.OccurredAt)</span>
+                    <span><StatusChip Status="@KindTone(item.Kind)" Label="@item.KindLabel" /></span>
+                    <span>
+                        @item.Title
+                        @if (!string.IsNullOrWhiteSpace(item.Detail))
+                        {
+                            <div class="muted">@item.Detail</div>
+                        }
+                        @if (item.EntityId is not null)
+                        {
+                            <div class="muted font-mono">@item.EntityType · @item.EntityId</div>
+                        }
+                    </span>
+                </li>
+            }
+        </ol>
+        <Pager Meta="_meta" Disabled="_isLoading" OnPageChanged="GoToPageAsync" />
+    }
+</Card>
+
+@code {
+    private const int PerPage = 50;
+
+    // API üst sınırı (AdminPaging.MaxPerPage). CSV bu boyutta sayfalarla toplanır.
+    private const int ExportPerPage = 100;
+
+    // Ucun birleştirmeli sayfalaması her kaynaktan page × perPage satır okur; çok derin
+    // sayfalar pahalıdır. 5.000 satırdan uzun aralıkta kullanıcıdan aralığı daraltması istenir.
+    private const int ExportMaxPages = 50;
+
+    private static readonly IReadOnlyList<(string Value, string Label)> KindOptions =
+    [
+        (ActivityKinds.Registration, "Kayıt"),
+        (ActivityKinds.Login, "Giriş"),
+        (ActivityKinds.Listing, "İlan"),
+        (ActivityKinds.Offer, "Teklif"),
+        (ActivityKinds.Match, "Eşleşme"),
+        (ActivityKinds.Wallet, "Bakiye hareketi"),
+        (ActivityKinds.Notification, "Bildirim"),
+        (ActivityKinds.Claim, "Anlaşma bildirimi"),
+        (ActivityKinds.Admin, "Admin işlemi"),
+    ];
+
+    [SupplyParameterFromQuery(Name = "userId")]
+    public Guid? UserId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "name")]
+    public string? Name { get; set; }
+
+    private Guid? _loadedUserId;
+    private IReadOnlyList<AdminActivityItemDto>? _items;
+    private AdminPageMetaDto? _meta;
+    private int _page = 1;
+    private string _kind = string.Empty;
+    private string _from = string.Empty;
+    private string _to = string.Empty;
+    private bool _isLoading;
+    private bool _isExporting;
+    private string _exportProgress = string.Empty;
+    private string? _errorMessage;
+    private string? _infoMessage;
+
+    private string _userSearch = string.Empty;
+    private bool _isSearching;
+    private IReadOnlyList<AdminUserListItemDto>? _userResults;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UserId == _loadedUserId)
+        {
+            return;
+        }
+
+        _loadedUserId = UserId;
+        _page = 1;
+        _items = null;
+        _meta = null;
+        _infoMessage = null;
+        if (UserId is not null)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task SearchUsersAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_userSearch))
+        {
+            _userResults = null;
+            return;
+        }
+
+        _isSearching = true;
+        _errorMessage = null;
+        try
+        {
+            var result = await AdminClient.ListUsersAsync(
+                new AdminUserListQueryDto(_userSearch.Trim(), null, null, 1, 10),
+                CancellationToken.None);
+            _userResults = result.Value?.Data;
+            _errorMessage = result.ErrorMessage;
+        }
+        finally
+        {
+            _isSearching = false;
+        }
+    }
+
+    // Seçim adrese yazılır: sayfa yenilenince ya da bağlantı paylaşılınca aynı kişi açılır.
+    private void SelectUser(AdminUserListItemDto user)
+    {
+        _userResults = null;
+        _userSearch = string.Empty;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(
+            "/activity",
+            new Dictionary<string, object?> { ["userId"] = user.Id, ["name"] = $"{user.FullName} · {user.Email}" }));
+    }
+
+    private Task FilterAsync()
+    {
+        _page = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _page = page;
+        return LoadAsync();
+    }
+
+    private bool TryBuildQuery(int page, int perPage, out AdminActivityQueryDto query)
+    {
+        var from = AdminFormat.ParseLocalDate(_from);
+        var to = AdminFormat.ParseLocalDate(_to, endOfDay: true);
+        query = new AdminActivityQueryDto(from, to, string.IsNullOrEmpty(_kind) ? null : _kind, page, perPage);
+        if (from is not null && to is not null && from > to)
+        {
+            _errorMessage = "Başlangıç tarihi bitişten sonra olamaz.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task LoadAsync()
+    {
+        if (UserId is not { } userId)
+        {
+            return;
+        }
+
+        _errorMessage = null;
+        if (!TryBuildQuery(_page, PerPage, out var query))
+        {
+            return;
+        }
+
+        _isLoading = true;
+        try
+        {
+            var result = await AdminClient.ListUserActivityAsync(userId, query, CancellationToken.None);
+            _items = result.Value?.Data;
+            _meta = result.Value?.Meta;
+            _errorMessage = result.ErrorMessage;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // Ekrandaki süzgeçlerle (tür + tarih aralığı) BÜTÜN sayfalar toplanır, yalnız görünen sayfa değil.
+    private async Task ExportCsvAsync()
+    {
+        if (UserId is not { } userId || _isExporting)
+        {
+            return;
+        }
+
+        _errorMessage = _infoMessage = null;
+        if (!TryBuildQuery(1, ExportPerPage, out _))
+        {
+            return;
+        }
+
+        _isExporting = true;
+        try
+        {
+            var rows = new List<AdminActivityItemDto>();
+            var total = 0;
+            var truncated = false;
+            for (var page = 1; ; page++)
+            {
+                TryBuildQuery(page, ExportPerPage, out var query);
+                var result = await AdminClient.ListUserActivityAsync(userId, query, CancellationToken.None);
+                if (result.Value is not { } chunk)
+                {
+                    _errorMessage = result.ErrorMessage;
+                    return;
+                }
+
+                rows.AddRange(chunk.Data);
+                total = chunk.Meta.Total;
+                _exportProgress = $"{rows.Count}/{total}";
+                StateHasChanged();
+
+                if (chunk.Data.Count == 0 || rows.Count >= total || page >= chunk.Meta.TotalPages)
+                {
+                    break;
+                }
+
+                if (page >= ExportMaxPages)
+                {
+                    truncated = true;
+                    break;
+                }
+            }
+
+            await Files.DownloadTextAsync(FileName(), BuildCsv(rows), "text/csv;charset=utf-8");
+            _infoMessage = truncated
+                ? $"İlk {rows.Count} kayıt indirildi (toplam {total}). Tamamı için tarih aralığını daraltıp parça parça indirin."
+                : $"{rows.Count} kayıt CSV olarak indirildi.";
+        }
+        finally
+        {
+            _isExporting = false;
+            _exportProgress = string.Empty;
+        }
+    }
+
+    private string FileName()
+    {
+        var range = string.IsNullOrEmpty(_from) && string.IsNullOrEmpty(_to) ? "tumu" : $"{_from}_{_to}".Trim('_');
+        return $"islem-kaydi-{UserId:N}-{range}.csv";
+    }
+
+    // Noktalı virgül ayraç: Türkçe Excel virgülü ondalık ayracı sayar ve sütunları bölmez.
+    private static string BuildCsv(IEnumerable<AdminActivityItemDto> rows)
+    {
+        var csv = new StringBuilder();
+        csv.AppendLine("Tarih (İstanbul);Tür;Başlık;Ayrıntı;Kayıt türü;Kayıt ID");
+        foreach (var row in rows)
+        {
+            string[] cells =
+            [
+                Cell(AdminFormat.DateTimeWithSeconds(row.OccurredAt)),
+                Cell(row.KindLabel),
+                Cell(row.Title),
+                Cell(row.Detail),
+                Cell(row.EntityType),
+                Cell(row.EntityId),
+            ];
+            csv.AppendLine(string.Join(';', cells));
+        }
+
+        return csv.ToString();
+    }
+
+    // Excel formül enjeksiyonuna karşı = + - @ ile başlayan hücreler kesme işaretiyle başlatılır.
+    private static string Cell(string? value)
+    {
+        var text = value ?? string.Empty;
+        if (text.Length > 0 && "=+-@\t\r".Contains(text[0], StringComparison.Ordinal))
+        {
+            text = "'" + text;
+        }
+
+        return $"\"{text.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    private static string KindTone(string kind) => kind switch
+    {
+        ActivityKinds.Wallet => "PAID",
+        ActivityKinds.Admin => "frozen",
+        ActivityKinds.Claim => "REVIEW_PENDING",
+        ActivityKinds.Match => "MATCHED",
+        _ => "client",
+    };
+}

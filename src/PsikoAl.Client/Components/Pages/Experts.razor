@@ -91,6 +91,10 @@
                                         <TabsList>
                                             <TabsTrigger Value="profile">Profil</TabsTrigger>
                                             <TabsTrigger Value="documents">Belgeler</TabsTrigger>
+                                            @if (CanManageWallet)
+                                            {
+                                                <TabsTrigger Value="wallet">Cüzdan</TabsTrigger>
+                                            }
                                         </TabsList>
 
                                         <TabsContent Value="profile">
@@ -154,6 +158,12 @@
                                                 }
                                             </div>
                                         </TabsContent>
+                                        @if (CanManageWallet)
+                                        {
+                                            <TabsContent Value="wallet">
+                                                <ExpertWalletPanel ExpertId="expert.Id" />
+                                            </TabsContent>
+                                        }
                                     </Tabs>
 
                                     @if (_detail.RejectionReason is not null)
@@ -204,6 +214,9 @@
     private string? _errorMessage;
     private bool _isRejectDialogOpen;
     private Guid? _pendingRejectExpertId;
+
+    // Cüzdan uçları finans politikasında: moderatör sekmeyi görmez (uç zaten 403 döner).
+    private bool CanManageWallet => Session.CanAccess(AdminRoleGroups.Finance);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

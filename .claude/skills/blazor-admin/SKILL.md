@@ -11,7 +11,7 @@ description: Build Blazor components, pages, and layouts for the PsikoAl admin p
 ## When to Use
 
 - `PsikoAl.Client` içinde yeni sayfa, bileşen veya layout oluştururken
-- Mevcut admin sayfalarını düzenlerken (Users, Experts, Listings, Reviews, Matches, Categories, Assessments, Blogs, Notifications, SystemSettings)
+- Mevcut admin sayfalarını düzenlerken (Users, Experts, Listings, Reviews, Matches, Claims, UserActivity, Categories, Assessments, Blogs, Pricing, Payments, Referrals, Notifications, SystemSettings)
 - Onay kuyrukları, CRUD ekranları, dashboard kartları veya grafik eklerken
 
 ## Core References
@@ -179,7 +179,7 @@ Auth gerektirmeyen sayfalar (`/login`, `/not-found`, `/Error`) `@layout PsikoAl.
 
 ## Yerel CSS Sınıfları (`app.css`)
 
-`toolbar`, `toolbar-search`, `toolbar-select`, `table-card`, `cell-actions`, `detail-cell`, `detail-panel`, `detail-columns`, `detail-list`, `detail-actions`, `detail-heading`, `field`, `form-grid`, `stack-3`, `stat-grid`, `switch-field`, `link-button`, `muted`, `chart-card-body`, `auth-shell`, `auth-card`
+`toolbar`, `toolbar-search`, `toolbar-select`, `table-card`, `cell-actions`, `detail-cell`, `detail-panel`, `detail-columns`, `detail-list`, `detail-actions`, `detail-heading`, `field`, `form-grid`, `stack-3`, `stat-grid`, `switch-field`, `link-button`, `muted`, `chart-card-body`, `auth-shell`, `auth-card`, `wallet-summary`, `field-error`, `help-text`, `formula`, `row-current`, `section-title`, `preview-figures`, `timeline`, `user-picker`
 
 ## Do NOT
 
@@ -193,3 +193,9 @@ Auth gerektirmeyen sayfalar (`/login`, `/not-found`, `/Error`) `@layout PsikoAl.
 - Red/sonlandırma aksiyonunu sebep zorunluluğu olmadan yazma — `ReasonDialog` kullan
 - Audit log gerektiren işlemleri (`docs/ADMIN_PANEL_REQUIREMENTS.md` §6) sessizce geçme
 - UI metinlerini İngilizceye çevirme — panel tamamen Türkçedir
+
+## Saat, para ve dosya yardımcıları
+
+- Tarih/saat gösterimi `AdminFormat.DateTime(...)` ile (her zaman Europe/Istanbul); `ToLocalTime()` sunucu saat dilimine bağlıdır, yeni kodda kullanma. Form girdisi: `AdminFormat.ParseLocalDateTime` / `ParseLocalDate`.
+- Para etiketleri API'den hazır gelir (`*Label`); TL girdisini kuruşa `AdminFormat.ParseTryToKurus` çevirir.
+- Dosya indirme / yeni sekmede açma `AdminFileInterop` (wwwroot/js/admin-files.js modülü) ile — CSP `script-src 'self'`, satır içi betik çalışmaz.

@@ -224,6 +224,120 @@ public sealed class AdminClientService(
     public Task<AdminApiResult> DeleteBlogAsync(Guid blogId, CancellationToken cancellationToken)
         => SendAsync(HttpMethod.Delete, $"admin/blogs/{blogId}", body: null, cancellationToken);
 
+    public Task<AdminApiResult<AdminPagedResultDto<AdminPricingPeriodDto>>> ListPricingPeriodsAsync(
+        int page,
+        int perPage,
+        CancellationToken cancellationToken)
+        => GetAsync<AdminPagedResultDto<AdminPricingPeriodDto>>(
+            WithQuery(
+                "admin/pricing-periods",
+                ("page", page.ToString(CultureInfo.InvariantCulture)),
+                ("perPage", perPage.ToString(CultureInfo.InvariantCulture))),
+            cancellationToken);
+
+    public Task<AdminApiResult<AdminPricingPeriodDto>> CreatePricingPeriodAsync(
+        CreatePricingPeriodDto request,
+        CancellationToken cancellationToken)
+        => SendForResultAsync<AdminPricingPeriodDto>(HttpMethod.Post, "admin/pricing-periods", request, cancellationToken);
+
+    public Task<AdminApiResult<PricingPreviewResultDto>> PreviewPricingAsync(
+        PricingPreviewRequestDto request,
+        CancellationToken cancellationToken)
+        => SendForResultAsync<PricingPreviewResultDto>(HttpMethod.Post, "admin/pricing-periods/preview", request, cancellationToken);
+
+    public Task<AdminApiResult<AdminPagedResultDto<AdminWalletPaymentDto>>> ListWalletPaymentsAsync(
+        AdminWalletPaymentQueryDto query,
+        CancellationToken cancellationToken)
+        => GetAsync<AdminPagedResultDto<AdminWalletPaymentDto>>(
+            WithQuery(
+                "admin/wallet/payments",
+                ("status", query.Status),
+                ("hasInvoice", query.HasInvoice is { } hasInvoice ? (hasInvoice ? "true" : "false") : null),
+                ("page", query.Page?.ToString(CultureInfo.InvariantCulture)),
+                ("perPage", query.PerPage?.ToString(CultureInfo.InvariantCulture))),
+            cancellationToken);
+
+    public Task<AdminApiResult<AdminWalletPaymentDto>> UploadInvoiceAsync(
+        Guid paymentId,
+        byte[] content,
+        string fileName,
+        CancellationToken cancellationToken)
+        => SendForResultAsync<AdminWalletPaymentDto>(
+            HttpMethod.Post,
+            $"admin/wallet/payments/{paymentId}/invoice",
+            new FileUpload(content, fileName, "application/pdf"),
+            cancellationToken);
+
+    public async Task<AdminApiResult<string>> GetInvoiceUrlAsync(Guid paymentId, CancellationToken cancellationToken)
+    {
+        var result = await GetAsync<InvoiceUrlResult>($"admin/wallet/payments/{paymentId}/invoice", cancellationToken);
+        return result.Value is { Url: { Length: > 0 } url }
+            ? AdminApiResult.Ok(url)
+            : AdminApiResult.Failure<string>(result.ErrorMessage ?? ErrorMessagesTr.For(ErrorKeys.InternalError));
+    }
+
+    public Task<AdminApiResult<AdminExpertWalletDto>> GetExpertWalletAsync(
+        Guid expertId,
+        int page,
+        int perPage,
+        CancellationToken cancellationToken)
+        => GetAsync<AdminExpertWalletDto>(
+            WithQuery(
+                $"admin/wallet/experts/{expertId}",
+                ("page", page.ToString(CultureInfo.InvariantCulture)),
+                ("perPage", perPage.ToString(CultureInfo.InvariantCulture))),
+            cancellationToken);
+
+    public Task<AdminApiResult<AdminExpertWalletDto>> GiftExpertWalletAsync(
+        Guid expertId,
+        AdminWalletGiftDto request,
+        CancellationToken cancellationToken)
+        => SendForResultAsync<AdminExpertWalletDto>(HttpMethod.Post, $"admin/wallet/experts/{expertId}/gift", request, cancellationToken);
+
+    public Task<AdminApiResult<AdminExpertWalletDto>> AdjustExpertWalletAsync(
+        Guid expertId,
+        AdminWalletAdjustDto request,
+        CancellationToken cancellationToken)
+        => SendForResultAsync<AdminExpertWalletDto>(HttpMethod.Post, $"admin/wallet/experts/{expertId}/adjust", request, cancellationToken);
+
+    public Task<AdminApiResult<AdminPagedResultDto<AdminClaimDto>>> ListClaimsAsync(
+        AdminClaimQueryDto query,
+        CancellationToken cancellationToken)
+        => GetAsync<AdminPagedResultDto<AdminClaimDto>>(
+            WithQuery(
+                "admin/claims",
+                ("status", query.Status),
+                ("page", query.Page?.ToString(CultureInfo.InvariantCulture)),
+                ("perPage", query.PerPage?.ToString(CultureInfo.InvariantCulture))),
+            cancellationToken);
+
+    public Task<AdminApiResult> ResolveClaimAsync(Guid claimId, string note, CancellationToken cancellationToken)
+        => SendAsync(HttpMethod.Post, $"admin/claims/{claimId}/resolve", new AdminResolveClaimDto(note), cancellationToken);
+
+    public Task<AdminApiResult<AdminPagedResultDto<AdminReferralDto>>> ListReferralsAsync(
+        AdminReferralQueryDto query,
+        CancellationToken cancellationToken)
+        => GetAsync<AdminPagedResultDto<AdminReferralDto>>(
+            WithQuery(
+                "admin/referrals",
+                ("page", query.Page?.ToString(CultureInfo.InvariantCulture)),
+                ("perPage", query.PerPage?.ToString(CultureInfo.InvariantCulture))),
+            cancellationToken);
+
+    public Task<AdminApiResult<AdminPagedResultDto<AdminActivityItemDto>>> ListUserActivityAsync(
+        Guid userId,
+        AdminActivityQueryDto query,
+        CancellationToken cancellationToken)
+        => GetAsync<AdminPagedResultDto<AdminActivityItemDto>>(
+            WithQuery(
+                $"admin/users/{userId}/activity",
+                ("from", query.From?.ToString("O", CultureInfo.InvariantCulture)),
+                ("to", query.To?.ToString("O", CultureInfo.InvariantCulture)),
+                ("kind", query.Kind),
+                ("page", query.Page?.ToString(CultureInfo.InvariantCulture)),
+                ("perPage", query.PerPage?.ToString(CultureInfo.InvariantCulture))),
+            cancellationToken);
+
     private static string WithQuery(string path, params (string Name, string? Value)[] parameters)
     {
         var query = parameters
@@ -326,6 +440,8 @@ public sealed class AdminClientService(
     }
 
     private sealed record AdminSendNotificationResult(bool Success, int RecipientCount);
+
+    private sealed record InvoiceUrlResult(string Url);
 
     private sealed record FileUpload(byte[] Content, string FileName, string ContentType)
     {
