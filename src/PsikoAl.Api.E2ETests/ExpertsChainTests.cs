@@ -542,6 +542,14 @@ public sealed class ExpertsChainTests(E2EFixture fixture) : IAsyncLifetime
         // dayanaksız kalırdı — kurulumun kendisi testin varsayımını taşıyor.
         Assert.Equal("pending", body.GetProperty("status").GetString());
         Assert.Equal(_expertId, body.GetProperty("id").GetGuid());
+
+        // REVIZE-2 §6: danışan yalnız ilişkili olduğu uzmanı görür. Bu dosyanın ölçtüğü
+        // şey onay/revizyon görünürlüğü olduğu için danışan bu uzmanın davetiyle gelmiş
+        // sayılır (ilişki kuralının kendisi Revize2 zincirlerinde ölçülüyor).
+        var clientId = (await SupabaseTestIdentity.EnsureClientAsync(CancellationToken.None)).AuthUserId;
+        await ExecuteSqlAsync(
+            $"update public.profiles set referred_by_expert_id = @id where id = '{clientId}';",
+            _expertId);
     }
 
     private object NewProfilePayload(string? personalWebsite = null, string? avatarUrl = null) => new

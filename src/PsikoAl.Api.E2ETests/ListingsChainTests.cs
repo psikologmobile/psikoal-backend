@@ -413,6 +413,8 @@ public sealed class ListingsChainTests(E2EFixture fixture) : IAsyncLifetime
                 budgetMin = 750m,
                 budgetMax = 1500m,
                 preferredSessionType = "online",
+                contactConsent = true,
+                phone = "05551112233",
                 city,
                 assessmentResultId = (Guid?)null,
             });
@@ -503,6 +505,8 @@ public sealed class ListingsChainTests(E2EFixture fixture) : IAsyncLifetime
                     budgetMin = 750m,
                     budgetMax = 1500m,
                     preferredSessionType = "online",
+                    contactConsent = true,
+                    phone = "05551112233",
                     city = (string?)null,
                     assessmentResultId = foreignResultId,
                 });

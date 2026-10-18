@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using PsikoAl.Services.Options;
 using PsikoAl.Services.Payments;
 
-namespace PsikoAl.Services.Tests.Credits;
+namespace PsikoAl.Services.Tests.Wallet;
 
 public sealed class PayTrClientTests
 {
@@ -14,7 +14,7 @@ public sealed class PayTrClientTests
         "PA0123ABC",
         "uzman@example.test",
         50000,
-        [new PayTrBasketItem("Başlangıç (20 kredi)", 500m, 1)],
+        [new PayTrBasketItem("PsikoAl bakiye yükleme (₺500)", 500m, 1)],
         "Ayşe Yılmaz",
         "İstanbul",
         "05551112233");

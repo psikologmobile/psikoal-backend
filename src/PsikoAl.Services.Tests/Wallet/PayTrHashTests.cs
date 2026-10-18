@@ -4,7 +4,7 @@ using System.Text.Json;
 using PsikoAl.Services.Options;
 using PsikoAl.Services.Payments;
 
-namespace PsikoAl.Services.Tests.Credits;
+namespace PsikoAl.Services.Tests.Wallet;
 
 // Beklenen değerler BAĞIMSIZ bir uygulamayla (Node.js crypto, 2026-10-14) üretildi:
 //   createHmac("sha256", key).update(hashStr, "utf8").digest("base64")
@@ -124,11 +124,4 @@ public sealed class PayTrHashTests
         Assert.Equal("500.00", row[1].GetString());
         Assert.Equal(1, row[2].GetInt32());
     }
-
-    [Theory]
-    [InlineData("500", 50000)]
-    [InlineData("34.56", 3456)]
-    [InlineData("0.01", 1)]
-    public void Payment_amount_is_sent_in_kurus(string priceTry, int expectedKurus)
-        => Assert.Equal(expectedKurus, CreditPaymentService.ToKurus(decimal.Parse(priceTry, System.Globalization.CultureInfo.InvariantCulture)));
 }
