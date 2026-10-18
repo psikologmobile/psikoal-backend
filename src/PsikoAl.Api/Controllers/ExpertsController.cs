@@ -60,7 +60,7 @@ public sealed class ExpertsController(
     [Authorize]
     [HttpGet("{id:guid}/reviews")]
     public Task<IReadOnlyList<ReviewDto>> GetReviews(Guid id, CancellationToken cancellationToken)
-        => reviewService.ListApprovedForExpertAsync(id, cancellationToken);
+        => reviewService.ListApprovedForExpertAsync(id, this.CurrentUserId(), cancellationToken);
 
     [Authorize]
     [HttpPost("{id:guid}/reviews")]

@@ -111,14 +111,30 @@ public static class ErrorMessagesTr
         [ErrorKeys.BlogNotPublishable] = "Yayınlamak için başlık, özet, içerik ve kapak görseli gerekli.",
         [ErrorKeys.BlogScheduleMustBeFuture] = "Planlanan yayın zamanı ileri bir tarih olmalı.",
 
-        // --- Kredi ---
-        [ErrorKeys.InsufficientCredits] = "Teklif göndermek için yeterli krediniz yok.",
-        [ErrorKeys.CreditPackageNotFound] = "Kredi paketi bulunamadı.",
-        [ErrorKeys.CreditPackageInUse] = "Bu paketle yapılmış satın almalar var; silmek yerine pasif hâle getirin.",
-        [ErrorKeys.CreditBalanceNegative] = "Bu düzeltme uzmanın bakiyesini eksiye düşürür.",
-        [ErrorKeys.CreditAdjustReasonRequired] = "Kredi düzeltmesi için gerekçe yazmanız gerekiyor.",
-        [ErrorKeys.CreditPurchaseExpertNotApproved] = "Kredi satın almak için uzman profilinizin onaylanması gerekiyor.",
+        // --- Bakiye, teklif ücreti, ödeme ---
         [ErrorKeys.PaymentProviderUnavailable] = "Ödeme servisine şu an ulaşılamıyor. Biraz sonra tekrar deneyin.",
+        [ErrorKeys.InsufficientBalance] = "Teklif göndermek için bakiyeniz yetersiz.",
+        [ErrorKeys.OfferFeeChanged] = "Teklif ücreti güncellendi. Yeni ücreti kontrol edip tekrar gönderin.",
+        [ErrorKeys.OfferNotOnListing] = "Seçtiğiniz teklif bu ilana ait değil.",
+        [ErrorKeys.TopupAmountOutOfRange] = "Yükleme tutarı izin verilen aralıkta değil.",
+        [ErrorKeys.TopupExpertNotApproved] = "Bakiye yüklemek için uzman profilinizin onaylanması gerekiyor.",
+        [ErrorKeys.WalletPaymentNotFound] = "Ödeme bulunamadı.",
+        [ErrorKeys.WalletBalanceNegative] = "Bu düzeltme uzmanın bakiyesini ya da hakkını eksiye düşürür.",
+        [ErrorKeys.WalletAdjustReasonRequired] = "Düzeltme için gerekçe yazmanız gerekiyor.",
+        [ErrorKeys.InvoiceNotFound] = "Bu ödeme için henüz fatura yüklenmedi.",
+        [ErrorKeys.InvoicePaymentNotPaid] = "Fatura yalnız tamamlanmış ödemelere yüklenebilir.",
+
+        // --- İlan (Revize 2) ---
+        [ErrorKeys.ContactConsentRequired] = "Devam etmek için iletişim bilgilerinizin teklif veren uzmanlarla paylaşılmasına onay verin.",
+        [ErrorKeys.PhoneRequired] = "Uzmanların size ulaşabilmesi için telefon numaranızı girin.",
+        [ErrorKeys.ListingBudgetOutOfRange] = "Bütçeniz izin verilen aralıkta değil.",
+        [ErrorKeys.ListingNotOwner] = "Bu ilan size ait değil.",
+
+        // --- Anlaşma bildirimi ---
+        [ErrorKeys.ClaimAlreadyExists] = "Bu ilan için anlaşma bildiriminizi zaten gönderdiniz.",
+        [ErrorKeys.ClaimNotAllowed] = "Bu ilan için anlaşma bildirimi gönderemezsiniz.",
+        [ErrorKeys.ClaimNotFound] = "Anlaşma bildirimi bulunamadı.",
+        [ErrorKeys.ClaimAlreadyResolved] = "Bu bildirim zaten çözüldü.",
 
         // --- Genel ---
         [ErrorKeys.ValidationFailed] = "Girdiğiniz bilgileri kontrol edin.",

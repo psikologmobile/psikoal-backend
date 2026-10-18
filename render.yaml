@@ -38,7 +38,7 @@ services:
         sync: false
       - key: Brevo__ApiKey
         sync: false
-      # PayTR iFrame API (uzman kredisi satın alma, yalnız web sitesi) — docs/PAYMENTS.md.
+      # PayTR iFrame API (uzman bakiye yükleme, yalnız web sitesi) — docs/PAYMENTS.md.
       # Mağaza bilgileri YALNIZ burada (gizli); boşsa ödeme uçları PAYMENT_PROVIDER_UNAVAILABLE döner.
       - key: PayTR__MerchantId
         sync: false
@@ -53,6 +53,9 @@ services:
       - key: PayTR__OkUrl
         sync: false
       - key: PayTR__FailUrl
+        sync: false
+      # Web sitesinin kök adresi: uzman davet linki ${Site__PublicUrl}/davet/<kod> (REVIZE-2 §2.2).
+      - key: Site__PublicUrl
         sync: false
 
   - type: web

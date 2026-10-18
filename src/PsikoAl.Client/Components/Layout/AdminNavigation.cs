@@ -17,8 +17,6 @@ public static class AdminNavigation
         new("/categories", "Kategoriler", "category", AdminRoleGroups.Content),
         new("/assessments", "Testler", "assessment", AdminRoleGroups.Content),
         new("/blogs", "Blog", "blog", AdminRoleGroups.Content),
-        new("/credit-packages", "Kredi Paketleri", "wallet", AdminRoleGroups.Finance),
-        new("/credit-payments", "Satın Almalar", "receipt", AdminRoleGroups.Finance),
         new("/notifications", "Bildirimler", "notification", AdminRoleGroups.SuperAdminOnly),
         new("/settings", "Ayarlar", "settings", AdminRoleGroups.SuperAdminOnly),
         new("/audit-logs", "Denetim Kaydı", "audit", AdminRoleGroups.SuperAdminOnly),

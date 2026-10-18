@@ -7,5 +7,5 @@ public interface IReviewService
 {
     Task<ReviewDto> CreateAsync(Guid clientUserId, Guid expertId, CreateReviewDto request, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ReviewDto>> ListApprovedForExpertAsync(Guid expertId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ReviewDto>> ListApprovedForExpertAsync(Guid expertId, Guid? viewerUserId, CancellationToken cancellationToken);
 }

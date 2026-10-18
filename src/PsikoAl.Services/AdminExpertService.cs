@@ -14,7 +14,8 @@ namespace PsikoAl.Services;
 public sealed class AdminExpertService(
     IUnitOfWork unitOfWork,
     IAdminGuard adminGuard,
-    INotificationService notificationService) : IAdminExpertService
+    INotificationService notificationService,
+    IWalletService walletService) : IAdminExpertService
 {
     private static readonly JsonSerializerOptions RevisionJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -95,6 +96,10 @@ public sealed class AdminExpertService(
             new Dictionary<string, string>(),
             dataJson: null,
             cancellationToken);
+
+        // Hoş geldin hakkı + davet edene ödül (REVIZE-2 §2.3). İkisi de idempotent: revizyon
+        // onayı ya da red sonrası yeniden onay yeni hak doğurmaz.
+        await walletService.GrantApprovalRewardsAsync(expert.Id, cancellationToken);
     }
 
     public async Task RejectAsync(Guid actorAuthUserId, Guid expertId, string reason, CancellationToken cancellationToken)

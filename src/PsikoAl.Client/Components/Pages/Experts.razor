@@ -91,10 +91,6 @@
                                         <TabsList>
                                             <TabsTrigger Value="profile">Profil</TabsTrigger>
                                             <TabsTrigger Value="documents">Belgeler</TabsTrigger>
-                                            @if (CanManageCredits)
-                                            {
-                                                <TabsTrigger Value="credits">Krediler</TabsTrigger>
-                                            }
                                         </TabsList>
 
                                         <TabsContent Value="profile">
@@ -158,12 +154,6 @@
                                                 }
                                             </div>
                                         </TabsContent>
-                                        @if (CanManageCredits)
-                                        {
-                                            <TabsContent Value="credits">
-                                                <ExpertCreditPanel ExpertId="expert.Id" />
-                                            </TabsContent>
-                                        }
                                     </Tabs>
 
                                     @if (_detail.RejectionReason is not null)
@@ -214,9 +204,6 @@
     private string? _errorMessage;
     private bool _isRejectDialogOpen;
     private Guid? _pendingRejectExpertId;
-
-    // Kredi uçları finans politikasında: moderatör sekmeyi görmez (uç zaten 403 döner).
-    private bool CanManageCredits => Session.CanAccess(AdminRoleGroups.Finance);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

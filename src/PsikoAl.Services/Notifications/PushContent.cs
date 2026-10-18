@@ -26,7 +26,15 @@ public static class PushContent
         [NotificationTypes.ExpertRejected] = ("Profil güncellemesi", "Uzman profilinizle ilgili bir güncelleme var."),
         [NotificationTypes.ReviewApproved] = ("Değerlendirme güncellemesi", "Değerlendirmenizle ilgili bir güncelleme var."),
         [NotificationTypes.ReviewRejected] = ("Değerlendirme güncellemesi", "Değerlendirmenizle ilgili bir güncelleme var."),
-        [NotificationTypes.CreditPurchased] = ("Krediniz yüklendi", "Kredi satın alımınız tamamlandı."),
+        [NotificationTypes.Matched] = ("Yeni eşleşme", "Bir danışan sizinle eşleştiğini bildirdi."),
+        [NotificationTypes.ListingMatchedOther] = ("İlan güncellemesi", "Teklif verdiğiniz bir ilan başka bir uzmanla eşleşti."),
+        [NotificationTypes.ClaimReminder] = ("Hatırlatma", "Bir uzman sizinle anlaştığını bildirdi. Ayrıntılar uygulamada."),
+        [NotificationTypes.InvitedClientListing] = ("Davetiniz ilan açtı", "Davet ettiğiniz bir danışanın ilanı yayında."),
+        [NotificationTypes.BalanceTopup] = ("Bakiyeniz yüklendi", "Bakiye yüklemeniz tamamlandı."),
+        [NotificationTypes.AdminGift] = ("Hediye", "Hesabınıza bir hediye tanımlandı."),
+        [NotificationTypes.WelcomeRights] = ("Hoş geldiniz", "Ücretsiz teklif hakkınız hesabınıza tanımlandı."),
+        [NotificationTypes.ReferralReward] = ("Davetiniz kazandırdı", "Ücretsiz teklif hakkı kazandınız."),
+        [NotificationTypes.InvoiceReady] = ("Faturanız hazır", "Bir ödemenizin faturası yüklendi."),
     };
 
     public static (string Title, string Body) TextFor(string type, string renderedTitle, string renderedBody)

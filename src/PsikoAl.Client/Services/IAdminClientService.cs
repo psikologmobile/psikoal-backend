@@ -116,35 +116,6 @@ public interface IAdminClientService
         CancellationToken cancellationToken);
 
     Task<AdminApiResult> DeleteBlogAsync(Guid blogId, CancellationToken cancellationToken);
-
-    Task<AdminApiResult<IReadOnlyList<AdminCreditPackageDto>>> ListCreditPackagesAsync(CancellationToken cancellationToken);
-
-    Task<AdminApiResult<AdminCreditPackageDto>> CreateCreditPackageAsync(
-        CreateAdminCreditPackageDto request,
-        CancellationToken cancellationToken);
-
-    Task<AdminApiResult<AdminCreditPackageDto>> UpdateCreditPackageAsync(
-        Guid packageId,
-        UpdateAdminCreditPackageDto request,
-        CancellationToken cancellationToken);
-
-    Task<AdminApiResult> DeleteCreditPackageAsync(Guid packageId, CancellationToken cancellationToken);
-
-    Task<AdminApiResult<AdminPagedResultDto<AdminCreditPaymentListItemDto>>> ListCreditPaymentsAsync(
-        AdminCreditPaymentQueryDto query,
-        CancellationToken cancellationToken);
-
-    Task<AdminApiResult<AdminExpertCreditsDto>> GetExpertCreditsAsync(
-        Guid expertId,
-        int page,
-        int perPage,
-        CancellationToken cancellationToken);
-
-    Task<AdminApiResult<AdminExpertCreditsDto>> AdjustExpertCreditsAsync(
-        Guid expertId,
-        int amount,
-        string reason,
-        CancellationToken cancellationToken);
 }
 
 public sealed record AdminExpertDocumentUrls(string? CvUrl, IReadOnlyList<string> CertificateUrls);

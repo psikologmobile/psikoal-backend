@@ -25,8 +25,6 @@ const PAGES = [
   { href: '/categories', navLabel: 'Kategoriler', heading: 'Kategoriler' },
   { href: '/assessments', navLabel: 'Testler', heading: 'Testler' },
   { href: '/blogs', navLabel: 'Blog', heading: 'Blog Yazıları' },
-  { href: '/credit-packages', navLabel: 'Kredi Paketleri', heading: 'Kredi Paketleri' },
-  { href: '/credit-payments', navLabel: 'Satın Almalar', heading: 'Satın Almalar' },
   { href: '/notifications', navLabel: 'Bildirimler', heading: 'Bildirimler' },
   { href: '/settings', navLabel: 'Ayarlar', heading: 'Sistem Ayarları' },
   { href: '/audit-logs', navLabel: 'Denetim Kaydı', heading: 'Denetim Kaydı' },

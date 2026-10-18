@@ -7,6 +7,8 @@ using PsikoAl.Services.Abstractions;
 
 namespace PsikoAl.Api.Controllers;
 
+// Kabul/ret uçları REVIZE-2 §3.4 ile kalktı: danışan ilanını POST /listings/{id}/match ile
+// "eşleşti" işaretler.
 [ApiController]
 [Route("offers")]
 [Authorize]
@@ -23,6 +25,11 @@ public sealed class OffersController(IOfferService offerService) : ControllerBas
         });
     }
 
+    // REVIZE-2 §4: yalnız ŞU ANKİ ücret ve bakiyeye etkisi.
+    [HttpGet("quote")]
+    public async Task<IActionResult> Quote([FromQuery] Guid listingId, CancellationToken cancellationToken)
+        => Ok(new { data = await offerService.QuoteAsync(this.CurrentUserId(), listingId, cancellationToken) });
+
     [HttpGet("{id:guid}")]
     public Task<OfferDto> GetById(Guid id, CancellationToken cancellationToken)
         => offerService.GetByIdAsync(id, this.CurrentUserId(), cancellationToken);
@@ -30,14 +37,6 @@ public sealed class OffersController(IOfferService offerService) : ControllerBas
     [HttpPost]
     public Task<OfferDto> Create(CreateOfferDto request, CancellationToken cancellationToken)
         => offerService.CreateAsync(this.CurrentUserId(), request, cancellationToken);
-
-    [HttpPost("{id:guid}/accept")]
-    public Task<OfferDto> Accept(Guid id, CancellationToken cancellationToken)
-        => offerService.AcceptAsync(this.CurrentUserId(), id, cancellationToken);
-
-    [HttpPost("{id:guid}/reject")]
-    public Task<OfferDto> Reject(Guid id, CancellationToken cancellationToken)
-        => offerService.RejectAsync(this.CurrentUserId(), id, cancellationToken);
 
     [HttpPost("{id:guid}/withdraw")]
     public Task<OfferDto> Withdraw(Guid id, CancellationToken cancellationToken)

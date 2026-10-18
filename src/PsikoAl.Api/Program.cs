@@ -45,6 +45,10 @@ builder.Services
     .Bind(builder.Configuration.GetSection(PayTrOptions.SectionName));
 
 builder.Services
+    .AddOptions<SiteOptions>()
+    .Bind(builder.Configuration.GetSection(SiteOptions.SectionName));
+
+builder.Services
     .AddOptions<AuthOptions>()
     .Bind(builder.Configuration.GetSection(AuthOptions.SectionName));
 
@@ -157,9 +161,14 @@ builder.Services.AddScoped<IAssessmentService, AssessmentService>();
 builder.Services.AddScoped<IAdminAssessmentService, AdminAssessmentService>();
 builder.Services.AddScoped<IBlogService, BlogService>();
 builder.Services.AddScoped<IAdminBlogService, AdminBlogService>();
-builder.Services.AddScoped<ICreditService, CreditService>();
-builder.Services.AddScoped<ICreditPaymentService, CreditPaymentService>();
-builder.Services.AddScoped<IAdminCreditService, AdminCreditService>();
+builder.Services.AddScoped<IWalletService, WalletService>();
+builder.Services.AddScoped<IWalletPaymentService, WalletPaymentService>();
+builder.Services.AddScoped<IListingClaimService, ListingClaimService>();
+builder.Services.AddScoped<IAdminPricingService, AdminPricingService>();
+builder.Services.AddScoped<IAdminClaimService, AdminClaimService>();
+builder.Services.AddScoped<IAdminReferralService, AdminReferralService>();
+builder.Services.AddScoped<IAdminActivityService, AdminActivityService>();
+builder.Services.AddScoped<IAdminWalletService, AdminWalletService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IAdminGuard, AdminGuard>();
 builder.Services.AddScoped<IAdminAuditLogService, AdminAuditLogService>();

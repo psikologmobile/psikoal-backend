@@ -224,57 +224,6 @@ public sealed class AdminClientService(
     public Task<AdminApiResult> DeleteBlogAsync(Guid blogId, CancellationToken cancellationToken)
         => SendAsync(HttpMethod.Delete, $"admin/blogs/{blogId}", body: null, cancellationToken);
 
-    public Task<AdminApiResult<IReadOnlyList<AdminCreditPackageDto>>> ListCreditPackagesAsync(CancellationToken cancellationToken)
-        => GetAsync<IReadOnlyList<AdminCreditPackageDto>>("admin/credits/packages", cancellationToken);
-
-    public Task<AdminApiResult<AdminCreditPackageDto>> CreateCreditPackageAsync(
-        CreateAdminCreditPackageDto request,
-        CancellationToken cancellationToken)
-        => SendForResultAsync<AdminCreditPackageDto>(HttpMethod.Post, "admin/credits/packages", request, cancellationToken);
-
-    public Task<AdminApiResult<AdminCreditPackageDto>> UpdateCreditPackageAsync(
-        Guid packageId,
-        UpdateAdminCreditPackageDto request,
-        CancellationToken cancellationToken)
-        => SendForResultAsync<AdminCreditPackageDto>(HttpMethod.Put, $"admin/credits/packages/{packageId}", request, cancellationToken);
-
-    public Task<AdminApiResult> DeleteCreditPackageAsync(Guid packageId, CancellationToken cancellationToken)
-        => SendAsync(HttpMethod.Delete, $"admin/credits/packages/{packageId}", body: null, cancellationToken);
-
-    public Task<AdminApiResult<AdminPagedResultDto<AdminCreditPaymentListItemDto>>> ListCreditPaymentsAsync(
-        AdminCreditPaymentQueryDto query,
-        CancellationToken cancellationToken)
-        => GetAsync<AdminPagedResultDto<AdminCreditPaymentListItemDto>>(
-            WithQuery(
-                "admin/credits/payments",
-                ("status", query.Status),
-                ("page", query.Page?.ToString(CultureInfo.InvariantCulture)),
-                ("perPage", query.PerPage?.ToString(CultureInfo.InvariantCulture))),
-            cancellationToken);
-
-    public Task<AdminApiResult<AdminExpertCreditsDto>> GetExpertCreditsAsync(
-        Guid expertId,
-        int page,
-        int perPage,
-        CancellationToken cancellationToken)
-        => GetAsync<AdminExpertCreditsDto>(
-            WithQuery(
-                $"admin/credits/experts/{expertId}",
-                ("page", page.ToString(CultureInfo.InvariantCulture)),
-                ("perPage", perPage.ToString(CultureInfo.InvariantCulture))),
-            cancellationToken);
-
-    public Task<AdminApiResult<AdminExpertCreditsDto>> AdjustExpertCreditsAsync(
-        Guid expertId,
-        int amount,
-        string reason,
-        CancellationToken cancellationToken)
-        => SendForResultAsync<AdminExpertCreditsDto>(
-            HttpMethod.Post,
-            $"admin/credits/experts/{expertId}/adjust",
-            new AdminCreditAdjustDto(amount, reason),
-            cancellationToken);
-
     private static string WithQuery(string path, params (string Name, string? Value)[] parameters)
     {
         var query = parameters

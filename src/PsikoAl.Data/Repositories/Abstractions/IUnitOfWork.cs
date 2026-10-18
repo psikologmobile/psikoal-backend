@@ -40,13 +40,15 @@ public interface IUnitOfWork
 
     IBlogLikeRepository BlogLikes { get; }
 
-    ICreditPackageRepository CreditPackages { get; }
+    IPricingPeriodRepository PricingPeriods { get; }
 
-    ICreditPaymentRepository CreditPayments { get; }
+    IWalletPaymentRepository WalletPayments { get; }
 
-    ICreditTransactionRepository CreditTransactions { get; }
+    IWalletTransactionRepository WalletTransactions { get; }
 
-    IExpertCreditRepository ExpertCredits { get; }
+    IExpertWalletRepository ExpertWallets { get; }
+
+    IListingClaimRepository ListingClaims { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 

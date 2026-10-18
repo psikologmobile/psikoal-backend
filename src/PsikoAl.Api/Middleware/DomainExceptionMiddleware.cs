@@ -23,20 +23,20 @@ public sealed class DomainExceptionMiddleware(RequestDelegate next)
             // ilan ekranında "LISTING_MAX_ACTIVE_EXCEEDED" görüyordu. Kod makineye,
             // mesaj kullanıcıya ait: `code` sözleşme gereği aynen korunuyor —
             // mobil onu dallanma için kullanıyor — `message` artık Türkçe.
-            await WriteAsync(context, exception.ErrorKey, exception.Field);
+            await WriteAsync(context, exception.ErrorKey, exception.Field, exception.Meta);
         }
         catch (DbUpdateException exception)
             when (exception.InnerException is PostgresException { SqlState: UniqueViolationSqlState } postgres)
         {
-            await WriteAsync(context, UniqueViolationErrorKeys.For(postgres.ConstraintName), field: null);
+            await WriteAsync(context, UniqueViolationErrorKeys.For(postgres.ConstraintName), field: null, meta: null);
         }
     }
 
-    private static Task WriteAsync(HttpContext context, string errorKey, string? field)
+    private static Task WriteAsync(HttpContext context, string errorKey, string? field, object? meta)
     {
         context.Response.StatusCode = DomainErrorStatusCodes.For(errorKey);
         return context.Response.WriteAsJsonAsync(
-            new ApiErrorDto(errorKey, ErrorMessagesTr.For(errorKey), field),
+            new ApiErrorDto(errorKey, ErrorMessagesTr.For(errorKey), field, meta),
             context.RequestAborted);
     }
 }

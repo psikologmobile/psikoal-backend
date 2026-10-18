@@ -22,6 +22,27 @@ public sealed class ProfileService(
         return ProfileMapper.ToAuthUserDto(profile);
     }
 
+    // REVIZE-2 §6: danışanı davet eden uzman (yoksa null). Uzman satırı silinmişse FK null'a
+    // düştüğü için sonuç da null olur.
+    public async Task<ReferrerDto?> GetReferrerAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var profile = await GetRequiredProfileAsync(userId, cancellationToken);
+        if (profile.ReferredByExpertId is not { } expertId)
+        {
+            return null;
+        }
+
+        var expert = await unitOfWork.Experts.GetWithProfileAsync(expertId, cancellationToken);
+        return expert is { Profile: { } expertProfile }
+            ? new ReferrerDto(
+                expert.Id,
+                $"{expertProfile.FirstName} {expertProfile.LastName}".Trim(),
+                expert.Title,
+                expertProfile.AvatarUrl,
+                ExpertMapper.InitialsOf(expertProfile.FirstName, expertProfile.LastName))
+            : null;
+    }
+
     public async Task<AuthUserDto> UpdateMeAsync(Guid userId, UpdateProfileDto request, CancellationToken cancellationToken)
     {
         var profile = await GetRequiredProfileAsync(userId, cancellationToken);

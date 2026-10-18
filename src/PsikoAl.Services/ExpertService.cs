@@ -109,6 +109,7 @@ public sealed class ExpertService(IUnitOfWork unitOfWork, ICategoryService categ
             throw new DomainException(ErrorKeys.ExpertNotFound);
         }
 
+        await ExpertVisibility.EnsureVisibleAsync(unitOfWork, expertId, viewerUserId, cancellationToken);
         return await ToExpertDtoWithRatingAsync(expert, profile, cancellationToken);
     }
 
