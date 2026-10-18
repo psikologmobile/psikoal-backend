@@ -55,10 +55,11 @@ güncellenir. Otomatik deploy açık olsaydı API, migration'dan önce canlıya 
    | psikoal-api | `PayTR__MerchantKey` | Aynı ekran → Mağaza Parola (gizli) |
    | psikoal-api | `PayTR__MerchantSalt` | Aynı ekran → Mağaza Gizli Anahtar (gizli) |
    | psikoal-api | `PayTR__TestMode` | Blueprint'te `true`; canlı satışa geçerken `false` |
-   | psikoal-api | `PayTR__OkUrl` | Web sitesinin ödeme başarılı sayfası, ör. `https://psikoal.com/kredi/basarili` |
-   | psikoal-api | `PayTR__FailUrl` | Web sitesinin ödeme başarısız sayfası, ör. `https://psikoal.com/kredi/hata` |
+   | psikoal-api | `PayTR__OkUrl` | Web sitesinin ödeme başarılı sayfası, ör. `https://psikoal.com/bakiye/basarili` |
+   | psikoal-api | `PayTR__FailUrl` | Web sitesinin ödeme başarısız sayfası, ör. `https://psikoal.com/bakiye/hata` |
+   | psikoal-api | `Site__PublicUrl` | Web sitesinin kök adresi, ör. `https://psikoal.com` — uzman davet linki `/davet/<kod>` bundan üretilir |
 
-   PayTR anahtarları boşsa API çalışır, yalnız kredi satın alma uçları
+   PayTR anahtarları boşsa API çalışır, yalnız bakiye yükleme uçları
    `PAYMENT_PROVIDER_UNAVAILABLE` döner. PayTR panel ayarları (Bildirim URL'si dahil):
    `docs/PAYMENTS.md`.
    | psikoal-admin | `Api__BaseUrl` | API'nin public adresi, ör. `https://psikoal-api.onrender.com` |
