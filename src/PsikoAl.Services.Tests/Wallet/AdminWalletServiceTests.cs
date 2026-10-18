@@ -163,6 +163,23 @@ public sealed class AdminWalletServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Invoice_url_is_signed_for_an_uploaded_invoice_and_404_without_one()
+    {
+        var expert = await _db.AddExpertAsync();
+        var withInvoice = await AddPaymentAsync(expert.Id, WalletPaymentStatuses.Paid);
+        var without = await AddPaymentAsync(expert.Id, WalletPaymentStatuses.Paid);
+        await CreateService().UploadInvoiceAsync(_admin.AuthUserId, withInvoice.Id, Pdf(), "application/pdf", "a.pdf", CancellationToken.None);
+
+        var url = await CreateService().GetInvoiceUrlAsync(withInvoice.Id, CancellationToken.None);
+        var missing = await Assert.ThrowsAsync<DomainException>(() => CreateService().GetInvoiceUrlAsync(without.Id, CancellationToken.None));
+        var unknown = await Assert.ThrowsAsync<DomainException>(() => CreateService().GetInvoiceUrlAsync(Guid.NewGuid(), CancellationToken.None));
+
+        Assert.Equal($"https://signed.test/{StorageBuckets.Invoices}/{expert.Id}/{withInvoice.Id}.pdf", url.Url);
+        Assert.Equal(ErrorKeys.InvoiceNotFound, missing.ErrorKey);
+        Assert.Equal(ErrorKeys.WalletPaymentNotFound, unknown.ErrorKey);
+    }
+
+    [Fact]
     public async Task Payments_can_be_filtered_by_invoice_presence()
     {
         var expert = await _db.AddExpertAsync();

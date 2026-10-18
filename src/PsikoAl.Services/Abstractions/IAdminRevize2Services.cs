@@ -1,4 +1,5 @@
 using PsikoAl.Common.Dtos.Admin;
+using PsikoAl.Common.Dtos.Wallet;
 
 namespace PsikoAl.Services.Abstractions;
 
@@ -22,6 +23,8 @@ public interface IAdminWalletService
         string contentType,
         string? fileName,
         CancellationToken cancellationToken);
+
+    Task<InvoiceUrlDto> GetInvoiceUrlAsync(Guid paymentId, CancellationToken cancellationToken);
 
     Task<AdminExpertWalletDto> GetExpertWalletAsync(Guid expertId, int? page, int? perPage, CancellationToken cancellationToken);
 

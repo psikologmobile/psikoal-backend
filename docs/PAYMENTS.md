@@ -158,9 +158,10 @@ Admin uçları panelin mevcut sözleşmesini izler: tek nesne doğrudan, sayfal�
 |---|---|
 | `GET /admin/pricing-periods?page&perPage` | Dönemler, `isCurrent` işaretli |
 | `POST /admin/pricing-periods` | `{ effectiveFrom?, budgetMinTry, budgetMaxTry?, feeMinTry, feeMaxTry, dailyDecayPct, perOfferDecayPct, qualityWeights: { description, title, budget, location, sessionBoth, specialization, descriptionFullChars, titleFullChars, budgetFullMultiplier }, note? }`; geçmiş tarih verilemez |
-| `POST /admin/pricing-periods/preview` | `{ period?, listing: { title?, description?, budgetMax, city?, sessionType, specializationCount } }` → `{ qualityScore, breakdown, initialFeeKurus, initialFeeLabel, feeMin*, feeMax* }` (`period` yoksa geçerli dönem) |
+| `POST /admin/pricing-periods/preview` | `{ period?, listing: { title?, description?, budgetMax, city?, sessionType, specializationCount } }` → `{ qualityScore, breakdown, initialFeeKurus, initialFeeLabel, feeMin*, feeMax*, schedule: [{ days, offers, feeKurus, feeLabel }] }` (`period` yoksa geçerli dönem; `schedule` gün 0/1/3/7/14 × teklif 0/1/3/5 ızgarası, yalnız admin önizlemesi) |
 | `GET /admin/wallet/payments?status&hasInvoice&page&perPage` | Ödemeler + uzman + `invoice` |
 | `POST /admin/wallet/payments/{id}/invoice` | multipart `file` (PDF, ≤ 10 MB, imza `%PDF` kontrolü); yalnız `PAID`; tekrar yükleme üzerine yazar; uzmana `INVOICE_READY` |
+| `GET /admin/wallet/payments/{id}/invoice` | `{ url }` (5 dk imzalı adres, panelde görüntüleme/indirme); fatura yoksa 404 `INVOICE_NOT_FOUND` |
 | `GET /admin/wallet/experts/{id}?page&perPage` | `{ expertId, fullName, email, balanceKurus, balanceLabel, freeOfferRights, referralCode, transactions: { data, meta } }` |
 | `POST /admin/wallet/experts/{id}/gift` | `{ amountKurus ≥ 0 (tam TL), freeRights ≥ 0, reason? }` (en az biri > 0) → aynı yanıt; uzmana `ADMIN_GIFT` |
 | `POST /admin/wallet/experts/{id}/adjust` | `{ amountKurus (işaretli), freeRightsDelta (işaretli), reason (zorunlu) }`; eksiye düşerse 422 `WALLET_BALANCE_NEGATIVE` |

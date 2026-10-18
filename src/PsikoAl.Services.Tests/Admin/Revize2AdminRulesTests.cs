@@ -114,6 +114,22 @@ public sealed class Revize2AdminRulesTests
         AdminPricingService.EnsureValid(Period());
     }
 
+    [Fact]
+    public void Preview_schedule_follows_the_offer_fee_curve_down_to_the_floor()
+    {
+        var schedule = AdminPricingService.BuildSchedule(new PsikoAl.Services.Pricing.FeeCurve(100_000, 25_000, 10, 10));
+
+        long Fee(int days, int offers) => schedule.Single(step => step.Days == days && step.Offers == offers).FeeKurus;
+
+        Assert.Equal(20, schedule.Count);
+        Assert.Equal(100_000, Fee(0, 0));
+        Assert.Equal(90_000, Fee(1, 0));
+        Assert.Equal(90_000, Fee(0, 1));
+        Assert.Equal(81_000, Fee(1, 1));
+        Assert.Equal(25_000, Fee(14, 5));
+        Assert.Equal("₺810", schedule.Single(step => step.Days == 1 && step.Offers == 1).FeeLabel);
+    }
+
     private static CreatePricingPeriodDto Period()
         => new(
             null,

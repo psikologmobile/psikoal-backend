@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PsikoAl.Common.Constants;
 using PsikoAl.Common.Dtos.Admin;
+using PsikoAl.Common.Dtos.Wallet;
 using PsikoAl.Common.Exceptions;
 using PsikoAl.Common.Presentation;
 using PsikoAl.Common.Validation;
@@ -117,6 +118,22 @@ public sealed class AdminWalletService(
             expert?.Profile is { } profile ? $"{profile.FirstName} {profile.LastName}" : string.Empty,
             expert?.Profile?.Email ?? string.Empty,
             actor.DisplayName);
+    }
+
+    // Admin faturayı görüntülemek için uzmanla aynı kısa ömürlü imzalı adresi alır.
+    public async Task<InvoiceUrlDto> GetInvoiceUrlAsync(Guid paymentId, CancellationToken cancellationToken)
+    {
+        var payment = await unitOfWork.WalletPayments.GetByIdAsync(paymentId, cancellationToken)
+            ?? throw new DomainException(ErrorKeys.WalletPaymentNotFound);
+
+        if (payment.InvoicePath is not { Length: > 0 } path)
+        {
+            throw new DomainException(ErrorKeys.InvoiceNotFound);
+        }
+
+        var url = await storage.CreateSignedUrlAsync(
+            StorageBuckets.Invoices, path, WalletService.InvoiceUrlLifetime, cancellationToken);
+        return new InvoiceUrlDto(url);
     }
 
     public async Task<AdminExpertWalletDto> GetExpertWalletAsync(

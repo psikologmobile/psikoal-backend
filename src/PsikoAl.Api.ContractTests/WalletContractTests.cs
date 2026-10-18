@@ -49,6 +49,7 @@ public sealed class WalletContractTests(ApiFactory factory) : IClassFixture<ApiF
         var responses = new[]
         {
             await client.GetAsync("/admin/wallet/payments?status=PAID", CancellationToken.None),
+            await client.GetAsync($"/admin/wallet/payments/{id}/invoice", CancellationToken.None),
             await client.GetAsync($"/admin/wallet/experts/{id}", CancellationToken.None),
             await client.PostAsJsonAsync($"/admin/wallet/experts/{id}/gift", new { amountKurus = 100 }, CancellationToken.None),
             await client.PostAsJsonAsync($"/admin/wallet/experts/{id}/adjust", new { amountKurus = 100, reason = "r" }, CancellationToken.None),

@@ -5,6 +5,7 @@ using PsikoAl.Api.Authorization;
 using PsikoAl.Api.Extensions;
 using PsikoAl.Common.Constants;
 using PsikoAl.Common.Dtos.Admin;
+using PsikoAl.Common.Dtos.Wallet;
 using PsikoAl.Common.Exceptions;
 using PsikoAl.Services.Abstractions;
 
@@ -43,6 +44,11 @@ public sealed class AdminWalletController(IAdminWalletService adminWalletService
         return await adminWalletService.UploadInvoiceAsync(
             this.CurrentUserId(), id, content, file.ContentType, file.FileName, cancellationToken);
     }
+
+    // Görüntüleme/indirme: 5 dakikalık imzalı Storage adresi (fatura yoksa 404 INVOICE_NOT_FOUND).
+    [HttpGet("payments/{id:guid}/invoice")]
+    public Task<InvoiceUrlDto> GetInvoice(Guid id, CancellationToken cancellationToken)
+        => adminWalletService.GetInvoiceUrlAsync(id, cancellationToken);
 
     [HttpGet("experts/{expertId:guid}")]
     public Task<AdminExpertWalletDto> GetExpertWallet(

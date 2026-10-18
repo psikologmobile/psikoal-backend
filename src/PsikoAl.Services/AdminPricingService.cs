@@ -19,6 +19,9 @@ public sealed class AdminPricingService(
     IAdminGuard adminGuard,
     TimeProvider timeProvider) : IAdminPricingService
 {
+    private static readonly int[] PreviewScheduleDays = [0, 1, 3, 7, 14];
+    private static readonly int[] PreviewScheduleOffers = [0, 1, 3, 5];
+
     public async Task<AdminPagedResultDto<AdminPricingPeriodDto>> ListAsync(
         int? page,
         int? perPage,
@@ -93,17 +96,20 @@ public sealed class AdminPricingService(
     public async Task<PricingPreviewResultDto> PreviewAsync(PricingPreviewRequestDto request, CancellationToken cancellationToken)
     {
         int budgetMinTry, feeMinTry, feeMaxTry;
+        decimal dailyDecayPct, perOfferDecayPct;
         QualityWeights weights;
         if (request.Period is { } candidate)
         {
             EnsureValid(candidate);
             (budgetMinTry, feeMinTry, feeMaxTry) = (candidate.BudgetMinTry, candidate.FeeMinTry, candidate.FeeMaxTry);
+            (dailyDecayPct, perOfferDecayPct) = (candidate.DailyDecayPct, candidate.PerOfferDecayPct);
             weights = QualityWeights.FromDto(candidate.QualityWeights);
         }
         else
         {
             var current = await ListingPricing.GetCurrentPeriodAsync(unitOfWork, timeProvider.GetUtcNow(), cancellationToken);
             (budgetMinTry, feeMinTry, feeMaxTry) = (current.BudgetMinTry, current.FeeMinTry, current.FeeMaxTry);
+            (dailyDecayPct, perOfferDecayPct) = (current.DailyDecayPct, current.PerOfferDecayPct);
             weights = QualityWeights.Parse(current.QualityWeights);
         }
 
@@ -131,7 +137,24 @@ public sealed class AdminPricingService(
             feeMin,
             MoneyLabel.Try(feeMin),
             feeMax,
-            MoneyLabel.Try(feeMax));
+            MoneyLabel.Try(feeMax),
+            BuildSchedule(new FeeCurve(initial, feeMin, dailyDecayPct, perOfferDecayPct)));
+    }
+
+    // Önizleme tablosu: gün × teklif sayısı ızgarasında ücret. Hesap OfferFeeCalculator'da
+    // kalır (tek kaynak); panel yalnız gösterir. Bu tablo YALNIZ admin içindir — uzmana
+    // bir sonraki düşüş hiçbir uçta gösterilmez (REVIZE-2 §1.2).
+    internal static IReadOnlyList<PricingPreviewStepDto> BuildSchedule(FeeCurve curve)
+    {
+        var approvedAt = DateTimeOffset.UnixEpoch;
+        return
+        [
+            .. PreviewScheduleDays.SelectMany(days => PreviewScheduleOffers.Select(offers =>
+            {
+                var fee = OfferFeeCalculator.CurrentFeeKurus(curve, approvedAt, approvedAt.AddDays(days), offers);
+                return new PricingPreviewStepDto(days, offers, fee, MoneyLabel.Try(fee));
+            })),
+        ];
     }
 
     // Veritabanı CHECK'leriyle aynı kurallar + ağırlıkların anlamlı olması. Hata alanı,

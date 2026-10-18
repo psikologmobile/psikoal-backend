@@ -67,4 +67,8 @@ public sealed record PricingPreviewResultDto(
     long FeeMinKurus,
     string FeeMinLabel,
     long FeeMaxKurus,
-    string FeeMaxLabel);
+    string FeeMaxLabel,
+    IReadOnlyList<PricingPreviewStepDto> Schedule);
+
+// Önizleme ızgarasının bir hücresi: onaydan Days tam gün sonra, Offers teklif gönderilmişken ücret.
+public sealed record PricingPreviewStepDto(int Days, int Offers, long FeeKurus, string FeeLabel);

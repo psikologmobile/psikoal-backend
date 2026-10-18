@@ -218,8 +218,8 @@ Uzman kendi profilini görür. (Admin ayrı uçlarla.)
 
 | Sayfa | İşlev | Uç |
 |---|---|---|
-| Fiyatlandırma dönemleri | Liste, geçerli dönem vurgulu; yeni dönem ekle (tüm alanlar + ağırlıklar); önizleme hesaplayıcı (örnek ilan → başlangıç ücreti) | `GET/POST /admin/pricing-periods`, `POST /admin/pricing-periods/preview` |
-| Bakiye ve ödemeler | Ödemeler (durum, fatura var/yok süzgeci), **fatura yükle** (PDF ≤ 10 MB) | `GET /admin/wallet/payments`, `POST /admin/wallet/payments/{id}/invoice` |
+| Fiyatlandırma dönemleri | Liste, geçerli dönem vurgulu; yeni dönem ekle (tüm alanlar + ağırlıklar); önizleme hesaplayıcı (örnek ilan → başlangıç ücreti + gün/teklif ücret tablosu) | `GET/POST /admin/pricing-periods`, `POST /admin/pricing-periods/preview` |
+| Bakiye ve ödemeler | Ödemeler (durum, fatura var/yok süzgeci), **fatura yükle** (PDF ≤ 10 MB) | `GET /admin/wallet/payments`, `POST`/`GET /admin/wallet/payments/{id}/invoice` |
 | Uzman cüzdanı | Bakiye, haklar, defter; **hediye** (bakiye ve/veya hak), **düzeltme** (gerekçe zorunlu) | `GET /admin/wallet/experts/{id}`, `POST .../gift`, `POST .../adjust` |
 | Kullanıcı işlem kaydı | Kişi seç → zaman çizelgesi: kayıt, giriş, ilan, teklif (ödenen ücret/hak), eşleşme, bakiye hareketi, bildirim, anlaşma bildirimi, admin işlemleri; tarih/saat; süzgeç ve CSV dışa aktarma | `GET /admin/users/{id}/activity?from&to&kind` |
 | Anlaşma bildirimleri | Açık / inceleme bekliyor / çözüldü; ilan, uzman, danışan; çözüm notu | `GET /admin/claims`, `POST /admin/claims/{id}/resolve` |
