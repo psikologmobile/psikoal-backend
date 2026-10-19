@@ -57,7 +57,7 @@ public sealed class AdminExpertService(
         var reviewCount = await unitOfWork.Reviews.GetReviewCountAsync(expert.Id, cancellationToken);
 
         return new AdminExpertDetailDto(
-            ExpertMapper.ToExpertDto(expert, profile, rating, reviewCount),
+            ExpertMapper.ToExpertDto(expert, profile, rating, reviewCount, isOwnProfile: false),
             profile.Email,
             expert.RejectionReason,
             expert.ApprovedAt,

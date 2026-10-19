@@ -49,6 +49,7 @@ public static class ErrorMessagesTr
         [ErrorKeys.ExpertRoleRequired] = "Bu işlem yalnızca uzman hesapları için geçerli.",
         [ErrorKeys.ExpertRejectionReasonRequired] = "Reddetme gerekçesi yazmanız gerekiyor.",
         [ErrorKeys.ExpertCertificateLimitExceeded] = "En fazla 10 sertifika yükleyebilirsiniz.",
+        [ErrorKeys.CertificateNotFound] = "Sertifika bulunamadı. Listeyi yenileyip tekrar deneyin.",
 
         // --- Dosya ---
         [ErrorKeys.FileTypeNotAllowed] = "Bu dosya türü desteklenmiyor.",

@@ -11,6 +11,7 @@ public static class DomainErrorStatusCodes
     {
         ErrorKeys.ProfileNotFound,
         ErrorKeys.ExpertNotFound,
+        ErrorKeys.CertificateNotFound,
         ErrorKeys.CategoryNotFound,
         ErrorKeys.ReviewNotFound,
         ErrorKeys.ListingNotFound,

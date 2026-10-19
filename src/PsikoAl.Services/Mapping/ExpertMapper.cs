@@ -6,7 +6,9 @@ namespace PsikoAl.Services.Mapping;
 
 public static class ExpertMapper
 {
-    public static ExpertDto ToExpertDto(Expert expert, Profile profile, double rating, int reviewCount)
+    // Red gerekçesi uzmanla admin arasındaki bir yazışma: danışana (ya da başka bir uzmana)
+    // sızmaması için yalnız uzman kendi profilini okurken doldurulur.
+    public static ExpertDto ToExpertDto(Expert expert, Profile profile, double rating, int reviewCount, bool isOwnProfile)
         => new(
             expert.Id,
             profile.FirstName,
@@ -25,7 +27,8 @@ public static class ExpertMapper
             expert.Education,
             expert.CvUrl,
             expert.Certificates,
-            expert.PersonalWebsite);
+            expert.PersonalWebsite,
+            isOwnProfile ? expert.RejectionReason : null);
 
     public static string InitialsOf(string firstName, string lastName)
     {

@@ -202,6 +202,9 @@ public sealed class ExpertsChainTests(E2EFixture fixture) : IAsyncLifetime
         Assert.Equal("rejected", ownProfile.GetProperty("status").GetString());
         Assert.False(ownProfile.GetProperty("acceptsOffers").GetBoolean());
 
+        // Uzman gerekçeyi kendi profilinde okur — bildirim silinse de cevap kaybolmaz.
+        Assert.Equal(reason, ownProfile.GetProperty("rejectionReason").GetString());
+
         // Sebep gerçekten SAKLANDI mı: admin paneli detay panelinde bunu gösteriyor.
         var detail = await fixture.Admin.GetFromJsonAsync<JsonElement>($"/admin/experts/{_expertId}");
         Assert.Equal(reason, detail.GetProperty("rejectionReason").GetString());
@@ -524,6 +527,57 @@ public sealed class ExpertsChainTests(E2EFixture fixture) : IAsyncLifetime
             new { personalWebsite = "psikoal.com" });
 
         Assert.Equal(HttpStatusCode.BadRequest, patch.StatusCode);
+    }
+
+    /// <summary>
+    /// Sertifika yükle → profilde gör → aynı değerle sil → Storage'da da gitmiş olsun.
+    /// </summary>
+    /// <remarks>
+    /// İstemci silinecek sertifikayı ExpertDto.certificates'teki değerle seçer; yükleme
+    /// ucu ile DTO'nun aynı biçimi (Storage yolu) döndürmesi bu zincirin tek varsayımı.
+    /// Biri DTO'ya imzalı URL koysaydı istemci artık hiçbir sertifikayı silemezdi.
+    /// Storage kontrolü service_role ile yapılır: liste güncellenip dosya kalsaydı uzman
+    /// "sildim" sanar ama belge admin imzalamasıyla açılabilir kalırdı.
+    /// </remarks>
+    [Fact]
+    public async Task Uzman_yüklediği_sertifikayı_profilde_dönen_değerle_siler()
+    {
+        await ResetExpertAsync();
+
+        using var form = new MultipartFormDataContent();
+        var pdf = new ByteArrayContent("%PDF-1.7 e2e sertifika"u8.ToArray());
+        pdf.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        form.Add(pdf, "file", "sertifika.pdf");
+        using var uploadRequest = new HttpRequestMessage(HttpMethod.Post, "/experts/profile/certificates") { Content = form };
+        uploadRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _expertToken);
+        var upload = await fixture.Mobile.SendAsync(uploadRequest);
+        Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+
+        var ownProfile = await (await ExpertSendAsync(HttpMethod.Get, $"/experts/{_expertId}")).Content.ReadFromJsonAsync<JsonElement>();
+        var certificate = Assert.Single(ownProfile.GetProperty("certificates").EnumerateArray()).GetString()!;
+        Assert.StartsWith($"{_expertId}/certificates/", certificate, StringComparison.Ordinal);
+        Assert.True(await StorageObjectExistsAsync(certificate));
+
+        var deleteUrl = $"/experts/profile/certificates?certificate={Uri.EscapeDataString(certificate)}";
+        var delete = await ExpertSendAsync(HttpMethod.Delete, deleteUrl);
+        Assert.Equal(HttpStatusCode.OK, delete.StatusCode);
+        var deleteBody = await delete.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Empty(deleteBody.GetProperty("certificates").EnumerateArray());
+        Assert.False(await StorageObjectExistsAsync(certificate));
+
+        // İkinci deneme (çift dokunuş, bayat ekran) sessizce 200 değil 404 almalı.
+        var again = await ExpertSendAsync(HttpMethod.Delete, deleteUrl);
+        Assert.Equal(HttpStatusCode.NotFound, again.StatusCode);
+        Assert.Equal("CERTIFICATE_NOT_FOUND", await ReadErrorCodeAsync(again));
+    }
+
+    private static async Task<bool> StorageObjectExistsAsync(string path)
+    {
+        using var storage = new HttpClient { BaseAddress = new Uri(LocalStack.SupabaseUrl.TrimEnd('/') + "/") };
+        storage.DefaultRequestHeaders.Add("apikey", LocalStack.ServiceRoleKey);
+        storage.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LocalStack.ServiceRoleKey);
+        using var response = await storage.GetAsync($"storage/v1/object/authenticated/documents/{path}");
+        return response.IsSuccessStatusCode;
     }
 
     private async Task ResetExpertAsync(string? personalWebsite = null, string? avatarUrl = null)

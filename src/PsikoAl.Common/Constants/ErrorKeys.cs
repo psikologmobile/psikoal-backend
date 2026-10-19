@@ -27,6 +27,7 @@ public static class ErrorKeys
     public const string ExpertRoleRequired = "EXPERT_ROLE_REQUIRED";
     public const string ExpertRejectionReasonRequired = "EXPERT_REJECTION_REASON_REQUIRED";
     public const string ExpertCertificateLimitExceeded = "EXPERT_CERTIFICATE_LIMIT_EXCEEDED";
+    public const string CertificateNotFound = "CERTIFICATE_NOT_FOUND";
     public const string FileTypeNotAllowed = "FILE_TYPE_NOT_ALLOWED";
     public const string FileTooLarge = "FILE_TOO_LARGE";
     public const string StorageUploadFailed = "STORAGE_UPLOAD_FAILED";

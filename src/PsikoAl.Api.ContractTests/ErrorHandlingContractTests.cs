@@ -35,6 +35,7 @@ public sealed class ErrorHandlingContractTests(ApiFactory factory) : IClassFixtu
     [InlineData(ErrorKeys.ListingNotFound, 404)]
     [InlineData(ErrorKeys.AssessmentResultNotFound, 404)]
     [InlineData(ErrorKeys.ExpertNotFound, 404)]
+    [InlineData(ErrorKeys.CertificateNotFound, 404)]
     [InlineData(ErrorKeys.MatchNotParticipant, 403)]
     [InlineData(ErrorKeys.OfferExpertRoleRequired, 403)]
     [InlineData(ErrorKeys.AdminUserNotFound, 403)]
