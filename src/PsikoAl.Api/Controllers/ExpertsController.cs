@@ -57,10 +57,21 @@ public sealed class ExpertsController(
         return Ok(new { certificates });
     }
 
+    // Sertifika, ExpertDto.certificates'te dönen değerin (Storage yolu) aynısıyla seçilir.
+    // DELETE gövdesini bazı istemci/proxy'ler düşürdüğü için değer sorgu parametresinde gelir.
+    [Authorize]
+    [HttpDelete("profile/certificates")]
+    [EnableRateLimiting(RateLimitPolicies.Upload)]
+    public async Task<IActionResult> DeleteCertificate([FromQuery] string? certificate, CancellationToken cancellationToken)
+    {
+        var certificates = await uploadService.DeleteCertificateAsync(this.CurrentUserId(), certificate, cancellationToken);
+        return Ok(new { certificates });
+    }
+
     [Authorize]
     [HttpGet("{id:guid}/reviews")]
     public Task<IReadOnlyList<ReviewDto>> GetReviews(Guid id, CancellationToken cancellationToken)
-        => reviewService.ListApprovedForExpertAsync(id, cancellationToken);
+        => reviewService.ListApprovedForExpertAsync(id, this.CurrentUserId(), cancellationToken);
 
     [Authorize]
     [HttpPost("{id:guid}/reviews")]

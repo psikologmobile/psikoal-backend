@@ -7,6 +7,7 @@ using PsikoAl.Common.Presentation;
 using PsikoAl.Data.Entities;
 using PsikoAl.Data.Repositories.Abstractions;
 using PsikoAl.Services.Abstractions;
+using PsikoAl.Services.Pricing;
 
 namespace PsikoAl.Services;
 
@@ -42,13 +43,24 @@ public sealed class AdminListingService(
             row.listing.Specialization,
             BudgetLabelFormatter.Format(row.listing.BudgetMin, row.listing.BudgetMax),
             row.listing.Status,
-            row.listing.CreatedAt))], meta);
+            row.listing.CreatedAt,
+            row.listing.QualityScore,
+            row.listing.OfferCount,
+            row.listing.InvitedExpertId != null))], meta);
     }
 
     public async Task<AdminListingDetailDto> GetDetailAsync(Guid listingId, CancellationToken cancellationToken)
     {
         var listing = await GetRequiredListingAsync(listingId, cancellationToken);
         var client = listing.Client ?? throw new DomainException(ErrorKeys.ProfileNotFound);
+
+        long? currentFee = null;
+        if (listing.Status == ListingStatuses.Open)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var period = await ListingPricing.GetCurrentPeriodAsync(unitOfWork, now, cancellationToken);
+            currentFee = ListingPricing.CurrentFeeKurus(listing, period, now);
+        }
 
         return new AdminListingDetailDto(
             listing.Id,
@@ -64,7 +76,14 @@ public sealed class AdminListingService(
             listing.RejectionReason,
             listing.ApprovedAt,
             listing.ExpiresAt,
-            listing.CreatedAt);
+            listing.CreatedAt,
+            listing.QualityScore,
+            listing.FeeInitialKurus,
+            currentFee,
+            currentFee is { } fee ? MoneyLabel.Try(fee) : null,
+            listing.OfferCount,
+            listing.InvitedExpertId,
+            listing.ContactConsentAt);
     }
 
     public async Task ApproveAsync(Guid actorAuthUserId, Guid listingId, CancellationToken cancellationToken)
@@ -78,13 +97,9 @@ public sealed class AdminListingService(
         }
 
         var oldStatus = listing.Status;
-        var expireDays = await unitOfWork.SystemSettings.GetIntAsync(SystemSettingKeys.ListingExpireDays, cancellationToken);
 
-        listing.Status = ListingStatuses.Open;
-        listing.ApprovedAt = DateTimeOffset.UtcNow;
-        listing.ApprovedBy = actor.Id;
-        listing.ExpiresAt = DateTimeOffset.UtcNow.AddDays(expireDays);
-        listing.RejectionReason = null;
+        // Onay anında kalite puanı ve ücret eğrisi ilana dondurulur (REVIZE-2 §1.1).
+        await ListingPublication.PublishAsync(unitOfWork, listing, actor.Id, DateTimeOffset.UtcNow, cancellationToken);
 
         await AddStatusAuditAsync(actor.Id, "admin.listing_approve", listing.Id, oldStatus, listing.Status, null, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -95,6 +110,8 @@ public sealed class AdminListingService(
             new Dictionary<string, string> { ["listingTitle"] = listing.Title },
             JsonSerializer.Serialize(new { listingId = listing.Id }),
             cancellationToken);
+
+        await ListingPublication.NotifyInvitedExpertAsync(notificationService, listing, cancellationToken);
     }
 
     public async Task RejectAsync(Guid actorAuthUserId, Guid listingId, string reason, CancellationToken cancellationToken)
@@ -135,8 +152,11 @@ public sealed class AdminListingService(
 
         listing.Status = ListingStatuses.Closed;
 
+        await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
         await AddStatusAuditAsync(actor.Id, "admin.listing_close", listing.Id, oldStatus, listing.Status, "Admin override", cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        await unitOfWork.Offers.RejectPendingForListingAsync(listing.Id, OfferClosedReasons.ListingClosed, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task ExtendExpiryAsync(Guid actorAuthUserId, Guid listingId, int additionalDays, CancellationToken cancellationToken)

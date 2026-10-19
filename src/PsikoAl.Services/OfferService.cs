@@ -1,38 +1,56 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using PsikoAl.Common.Constants;
 using PsikoAl.Common.Dtos.Offer;
 using PsikoAl.Common.Dtos.Offer.Create;
 using PsikoAl.Common.Exceptions;
+using PsikoAl.Common.Presentation;
 using PsikoAl.Data.Entities;
 using PsikoAl.Data.Repositories.Abstractions;
 using PsikoAl.Services.Abstractions;
 using PsikoAl.Services.Mapping;
+using PsikoAl.Services.Pricing;
+using PsikoAl.Services.Wallet;
 
 namespace PsikoAl.Services;
 
-public sealed class OfferService(IUnitOfWork unitOfWork, INotificationService notificationService) : IOfferService
+public sealed class OfferService(
+    IUnitOfWork unitOfWork,
+    INotificationService notificationService,
+    TimeProvider timeProvider) : IOfferService
 {
+    public async Task<OfferQuoteDto> QuoteAsync(Guid expertUserId, Guid listingId, CancellationToken cancellationToken)
+    {
+        await GetRequiredApprovedExpertAsync(expertUserId, cancellationToken);
+        var listing = await GetRequiredOpenListingAsync(listingId, cancellationToken);
+
+        var now = timeProvider.GetUtcNow();
+        var period = await ListingPricing.GetCurrentPeriodAsync(unitOfWork, now, cancellationToken);
+        var fee = ListingPricing.CurrentFeeKurus(listing, period, now);
+        var wallet = await unitOfWork.ExpertWallets.GetAsync(expertUserId, cancellationToken)
+            ?? throw new DomainException(ErrorKeys.ExpertNotFound);
+
+        var willUseFreeRight = wallet.FreeOfferRights > 0;
+        var balanceAfter = willUseFreeRight ? wallet.BalanceKurus : wallet.BalanceKurus - fee;
+        var sufficient = willUseFreeRight || balanceAfter >= 0;
+
+        return new OfferQuoteDto(
+            fee,
+            MoneyLabel.Try(fee),
+            wallet.BalanceKurus,
+            MoneyLabel.Try(wallet.BalanceKurus),
+            wallet.FreeOfferRights,
+            willUseFreeRight,
+            Math.Max(0, balanceAfter),
+            MoneyLabel.Try(Math.Max(0, balanceAfter)),
+            sufficient);
+    }
+
     public async Task<OfferDto> CreateAsync(Guid expertUserId, CreateOfferDto request, CancellationToken cancellationToken)
     {
-        var expert = await unitOfWork.Experts.GetWithProfileAsync(expertUserId, cancellationToken)
-            ?? throw await ExpertAccess.MissingExpertErrorAsync(
-                unitOfWork, expertUserId, ErrorKeys.OfferExpertRoleRequired, cancellationToken);
+        var expert = await GetRequiredApprovedExpertAsync(expertUserId, cancellationToken);
         var expertProfile = expert.Profile ?? throw new DomainException(ErrorKeys.ProfileNotFound);
-
-        if (expert.Status != ExpertStatuses.Approved)
-        {
-            throw new DomainException(ErrorKeys.OfferExpertNotApproved);
-        }
-
-        var listing = await unitOfWork.Listings.GetByIdAsync(request.ListingId, cancellationToken)
-            ?? throw new DomainException(ErrorKeys.ListingNotFound);
-
-        if (listing.Status != ListingStatuses.Open)
-        {
-            throw new DomainException(ErrorKeys.OfferListingNotOpen);
-        }
+        var listing = await GetRequiredOpenListingAsync(request.ListingId, cancellationToken);
 
         if (await unitOfWork.Offers.ExistsForListingAndExpertAsync(request.ListingId, expertUserId, cancellationToken))
         {
@@ -49,7 +67,7 @@ public sealed class OfferService(IUnitOfWork unitOfWork, INotificationService no
             SessionType = request.SessionType,
         };
 
-        await AddOfferChargingCreditsAsync(offer, cancellationToken);
+        await AddOfferChargingFeeAsync(offer, listing, request.ExpectedFeeKurus, cancellationToken);
 
         await notificationService.NotifyAsync(
             listing.ClientId,
@@ -65,36 +83,81 @@ public sealed class OfferService(IUnitOfWork unitOfWork, INotificationService no
         return await GetByIdAsync(offer.Id, expertUserId, cancellationToken);
     }
 
-    // Kredi düşümü, teklif ve defter kaydı TEK transaction'da: teklif yazılamazsa
-    // (ör. eşzamanlı ikinci teklif uq_offers_listing_expert'e takılırsa) kredi geri gelir.
-    // Düşüm koşullu UPDATE'tir; bakiye yetmiyorsa hiçbir şey yazılmadan reddedilir.
-    // Harcanan kredi teklif reddedilse/geri çekilse de iade edilmez (ürün kararı).
-    private async Task AddOfferChargingCreditsAsync(Offer offer, CancellationToken cancellationToken)
+    // Ücret, teklif, defter satırı ve teklif sayacı TEK transaction'da (REVIZE-2 §1.2, §2.3):
+    //  1. İlan satırı kilitlenir: ücret teklif sayısına bağlı; aynı anda gelen iki teklif
+    //     aynı sayıyı görüp aynı ücreti ödeyemez.
+    //  2. Anlık ücret uzmanın onayladığı ücretle (expectedFeeKurus) aynı değilse hiçbir
+    //     şey yazılmadan 409 OFFER_FEE_CHANGED (yeni ücret meta'da).
+    //  3. Ücretsiz hak varsa önce o kullanılır (OFFER_FREE_RIGHT, tutar 0); yoksa ücret
+    //     koşullu UPDATE ile bakiyeden düşer (OFFER_FEE); yetmezse 422 INSUFFICIENT_BALANCE.
+    // Teklif yazılamazsa (eşzamanlı ikinci teklif benzersizlik kısıtına takılırsa) düşüm geri
+    // alınır. Ödenen ücret teklif geri çekilse/ilan kapansa da iade edilmez (ürün kararı).
+    private async Task AddOfferChargingFeeAsync(
+        Offer offer,
+        Listing listing,
+        long? expectedFeeKurus,
+        CancellationToken cancellationToken)
     {
-        var cost = await OfferCreditCost.ReadAsync(unitOfWork.SystemSettings, cancellationToken);
+        var now = timeProvider.GetUtcNow();
+        var period = await ListingPricing.GetCurrentPeriodAsync(unitOfWork, now, cancellationToken);
 
         await using var transaction = await unitOfWork.BeginTransactionAsync(cancellationToken);
 
-        int? balanceAfter = null;
-        if (cost > 0)
+        var offerCount = await unitOfWork.Listings.LockOpenForOfferAsync(listing.Id, cancellationToken)
+            ?? throw new DomainException(ErrorKeys.OfferListingNotOpen);
+
+        var fee = ListingPricing.CurrentFeeKurus(listing, period, now, offerCount);
+        if (expectedFeeKurus != fee)
         {
-            balanceAfter = await unitOfWork.ExpertCredits.TryApplyDeltaAsync(offer.ExpertId, -cost, cancellationToken)
-                ?? throw new DomainException(ErrorKeys.InsufficientCredits);
+            throw new DomainException(
+                ErrorKeys.OfferFeeChanged,
+                "expectedFeeKurus",
+                new { feeKurus = fee, feeLabel = MoneyLabel.Try(fee) });
         }
 
         await unitOfWork.Offers.AddAsync(offer, cancellationToken);
-        if (balanceAfter is { } balance)
+
+        var wallet = await unitOfWork.ExpertWallets.GetAsync(offer.ExpertId, cancellationToken)
+            ?? throw new DomainException(ErrorKeys.ExpertNotFound);
+
+        WalletTransaction? entry = null;
+        if (wallet.FreeOfferRights > 0)
         {
-            await unitOfWork.CreditTransactions.AddAsync(
-                new CreditTransaction
+            entry = await WalletLedger.TryRecordAsync(
+                unitOfWork,
+                new WalletTransaction
                 {
                     ExpertId = offer.ExpertId,
-                    Amount = -cost,
-                    BalanceAfter = balance,
-                    Type = CreditTransactionTypes.OfferSpend,
+                    FreeRightsDelta = -1,
+                    Type = WalletTransactionTypes.OfferFreeRight,
+                    ListingId = listing.Id,
                     OfferId = offer.Id,
                 },
                 cancellationToken);
+        }
+
+        if (entry is not null)
+        {
+            offer.UsedFreeRight = true;
+            offer.FeePaidKurus = 0;
+        }
+        else if (fee > 0)
+        {
+            _ = await WalletLedger.TryRecordAsync(
+                    unitOfWork,
+                    new WalletTransaction
+                    {
+                        ExpertId = offer.ExpertId,
+                        AmountKurus = -fee,
+                        Type = WalletTransactionTypes.OfferFee,
+                        ListingId = listing.Id,
+                        OfferId = offer.Id,
+                    },
+                    cancellationToken)
+                ?? throw new DomainException(
+                    ErrorKeys.InsufficientBalance,
+                    meta: new { feeKurus = fee, feeLabel = MoneyLabel.Try(fee) });
+            offer.FeePaidKurus = fee;
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -112,7 +175,10 @@ public sealed class OfferService(IUnitOfWork unitOfWork, INotificationService no
 
         var offers = await query.OrderByDescending(offer => offer.CreatedAt).ToListAsync(cancellationToken);
         var rating = await unitOfWork.Reviews.GetRatingAsync(expertUserId, cancellationToken);
-        var dtos = offers.Select(offer => OfferMapper.ToOfferDto(offer, viewerIsListingOwner: false, rating)).ToList();
+        var claimedListingIds = await ClaimedListingIdsAsync(expertUserId, cancellationToken);
+        var dtos = offers
+            .Select(offer => OfferMapper.ToOfferDto(offer, viewerIsListingOwner: false, rating, claimedListingIds.Contains(offer.ListingId)))
+            .ToList();
 
         var pendingCount = await unitOfWork.Offers.QueryWithDetails()
             .CountAsync(offer => offer.ExpertId == expertUserId && offer.Status == OfferStatuses.Pending, cancellationToken);
@@ -158,74 +224,9 @@ public sealed class OfferService(IUnitOfWork unitOfWork, INotificationService no
         }
 
         var rating = await unitOfWork.Reviews.GetRatingAsync(offer.ExpertId, cancellationToken);
-        return OfferMapper.ToOfferDto(offer, isListingOwner, rating);
-    }
-
-    public async Task<OfferDto> AcceptAsync(Guid clientUserId, Guid offerId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var matchId = await unitOfWork.Matches.AcceptOfferAsync(offerId, clientUserId, cancellationToken);
-            if (matchId is null)
-            {
-                throw new DomainException(ErrorKeys.OfferNotFound);
-            }
-        }
-        catch (PostgresException exception) when (exception.MessageText == "OFFER_NOT_FOUND")
-        {
-            throw new DomainException(ErrorKeys.OfferNotFound);
-        }
-        catch (PostgresException exception) when (exception.MessageText == "LISTING_NOT_FOUND")
-        {
-            throw new DomainException(ErrorKeys.ListingNotFound);
-        }
-        catch (PostgresException exception) when (exception.MessageText == "OFFER_NOT_PENDING")
-        {
-            throw new DomainException(ErrorKeys.OfferNotPending);
-        }
-        catch (PostgresException exception) when (exception.MessageText == "LISTING_NOT_OPEN")
-        {
-            throw new DomainException(ErrorKeys.OfferListingNotOpen);
-        }
-
-        var acceptedOffer = await unitOfWork.Offers.GetWithListingAndExpertAsync(offerId, cancellationToken);
-        if (acceptedOffer?.Listing?.Client is { } client)
-        {
-            await notificationService.NotifyAsync(
-                acceptedOffer.ExpertId,
-                NotificationTypes.OfferAccepted,
-                new Dictionary<string, string>
-                {
-                    ["clientName"] = $"{client.FirstName} {client.LastName}",
-                    ["listingTitle"] = acceptedOffer.Listing.Title,
-                },
-                JsonSerializer.Serialize(new { matchId = acceptedOffer.MatchId }),
-                cancellationToken);
-        }
-
-        return await GetByIdAsync(offerId, clientUserId, cancellationToken);
-    }
-
-    public async Task<OfferDto> RejectAsync(Guid clientUserId, Guid offerId, CancellationToken cancellationToken)
-    {
-        var offer = await unitOfWork.Offers.GetWithListingAndExpertAsync(offerId, cancellationToken)
-            ?? throw new DomainException(ErrorKeys.OfferNotFound);
-
-        if (offer.Listing?.ClientId != clientUserId)
-        {
-            throw new DomainException(ErrorKeys.OfferNotFound);
-        }
-
-        if (offer.Status != OfferStatuses.Pending)
-        {
-            throw new DomainException(ErrorKeys.OfferNotPending);
-        }
-
-        offer.Status = OfferStatuses.Rejected;
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        var rating = await unitOfWork.Reviews.GetRatingAsync(offer.ExpertId, cancellationToken);
-        return OfferMapper.ToOfferDto(offer, viewerIsListingOwner: true, rating);
+        var claimed = !isListingOwner && await unitOfWork.ListingClaims.Query()
+            .AnyAsync(claim => claim.ListingId == offer.ListingId && claim.ExpertId == offer.ExpertId, cancellationToken);
+        return OfferMapper.ToOfferDto(offer, isListingOwner, rating, claimed);
     }
 
     public async Task<OfferDto> WithdrawAsync(Guid expertUserId, Guid offerId, CancellationToken cancellationToken)
@@ -246,7 +247,33 @@ public sealed class OfferService(IUnitOfWork unitOfWork, INotificationService no
         offer.Status = OfferStatuses.Withdrawn;
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var rating = await unitOfWork.Reviews.GetRatingAsync(offer.ExpertId, cancellationToken);
-        return OfferMapper.ToOfferDto(offer, viewerIsListingOwner: false, rating);
+        return await GetByIdAsync(offerId, expertUserId, cancellationToken);
+    }
+
+    private async Task<HashSet<Guid>> ClaimedListingIdsAsync(Guid expertUserId, CancellationToken cancellationToken)
+        => [.. await unitOfWork.ListingClaims.Query()
+            .Where(claim => claim.ExpertId == expertUserId)
+            .Select(claim => claim.ListingId)
+            .ToListAsync(cancellationToken)];
+
+    private async Task<Expert> GetRequiredApprovedExpertAsync(Guid expertUserId, CancellationToken cancellationToken)
+    {
+        var expert = await unitOfWork.Experts.GetWithProfileAsync(expertUserId, cancellationToken)
+            ?? throw await ExpertAccess.MissingExpertErrorAsync(
+                unitOfWork, expertUserId, ErrorKeys.OfferExpertRoleRequired, cancellationToken);
+
+        return expert.Status == ExpertStatuses.Approved
+            ? expert
+            : throw new DomainException(ErrorKeys.OfferExpertNotApproved);
+    }
+
+    private async Task<Listing> GetRequiredOpenListingAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        var listing = await unitOfWork.Listings.GetByIdAsync(listingId, cancellationToken)
+            ?? throw new DomainException(ErrorKeys.ListingNotFound);
+
+        return listing.Status == ListingStatuses.Open
+            ? listing
+            : throw new DomainException(ErrorKeys.OfferListingNotOpen);
     }
 }

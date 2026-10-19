@@ -14,7 +14,7 @@ namespace PsikoAl.Api.Controllers;
 //   2. adım (Bildirim URL): https://dev.paytr.com/iframe-api/iframe-api-2-adim
 [ApiController]
 [Route("payments/paytr")]
-public sealed class PayTrPaymentsController(ICreditPaymentService paymentService) : ControllerBase
+public sealed class PayTrPaymentsController(IWalletPaymentService paymentService) : ControllerBase
 {
     private const string PlainText = "text/plain";
 
@@ -25,7 +25,7 @@ public sealed class PayTrPaymentsController(ICreditPaymentService paymentService
     {
         var result = await paymentService.InitPayTrAsync(
             this.CurrentUserId(),
-            request.PackageId,
+            request.AmountKurus,
             ClientIp(HttpContext.Connection.RemoteIpAddress),
             cancellationToken);
         return Ok(new { data = result });

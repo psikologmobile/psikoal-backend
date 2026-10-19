@@ -1,0 +1,114 @@
+@page "/referrals"
+@inject IAdminClientService AdminClient
+
+<PageTitle>Davetler — PsikoAl Admin</PageTitle>
+
+<PageHeader Title="Davetler"
+            Description="Uzmanların davet koduyla gelen kullanıcılar. Davet edilen uzman onaylanınca davet edene REFERRAL_FREE_RIGHTS kadar ücretsiz teklif hakkı otomatik yazılır; danışan davetlerinde ödül yoktur (danışanın ilanları uzmana &quot;Davet&quot; rozetiyle görünür)." />
+
+@if (_errorMessage is not null)
+{
+    <Alert Variant="AlertVariant.Destructive" Class="mb-4">
+        <AlertDescription>@_errorMessage</AlertDescription>
+    </Alert>
+}
+
+<Card Class="table-card" data-testid="referrals-table">
+    @if (_isLoading)
+    {
+        <LoadingSkeleton />
+    }
+    else if (_referrals is { Count: 0 })
+    {
+        <EmptyState Title="Davet yok" Description="Henüz davet koduyla kayıt olan kullanıcı yok." />
+    }
+    else if (_referrals is not null)
+    {
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Davet eden</TableHead>
+                    <TableHead>Davet edilen</TableHead>
+                    <TableHead>Rol</TableHead>
+                    <TableHead>Kayıt</TableHead>
+                    <TableHead>Ödül</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                @foreach (var referral in _referrals)
+                {
+                    <TableRow>
+                        <TableCell>
+                            @referral.ReferrerName
+                            <div class="muted font-mono">@referral.ReferrerCode</div>
+                        </TableCell>
+                        <TableCell>
+                            @referral.ReferredName
+                            @if (referral.ReferredExpertStatus is { } expertStatus)
+                            {
+                                <div><StatusChip Status="@expertStatus" /></div>
+                            }
+                        </TableCell>
+                        <TableCell><StatusChip Status="@referral.ReferredRole" /></TableCell>
+                        <TableCell Class="text-muted-foreground">@AdminFormat.DateTime(referral.ReferredAt)</TableCell>
+                        <TableCell>
+                            @if (referral.Rewarded)
+                            {
+                                <StatusChip Status="approved" Label="Yazıldı" />
+                                <div class="muted">@AdminFormat.DateTime(referral.RewardedAt)</div>
+                            }
+                            else if (referral.ReferredRole == "expert" && referral.ReferredExpertStatus == ExpertStatuses.Rejected)
+                            {
+                                <span class="muted">Ödül yok (uzman reddedildi)</span>
+                            }
+                            else if (referral.ReferredRole == "expert")
+                            {
+                                <StatusChip Status="pending" Label="Uzman onayı bekleniyor" />
+                            }
+                            else
+                            {
+                                <span class="muted">Ödül yok (danışan)</span>
+                            }
+                        </TableCell>
+                    </TableRow>
+                }
+            </TableBody>
+        </Table>
+        <Pager Meta="_meta" Disabled="_isLoading" OnPageChanged="GoToPageAsync" />
+    }
+</Card>
+
+@code {
+    private const int PerPage = 25;
+
+    private IReadOnlyList<AdminReferralDto>? _referrals;
+    private AdminPageMetaDto? _meta;
+    private int _page = 1;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task GoToPageAsync(int page)
+    {
+        _page = page;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var result = await AdminClient.ListReferralsAsync(new AdminReferralQueryDto(_page, PerPage), CancellationToken.None);
+            _referrals = result.Value?.Data;
+            _meta = result.Value?.Meta;
+            _errorMessage = result.ErrorMessage;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

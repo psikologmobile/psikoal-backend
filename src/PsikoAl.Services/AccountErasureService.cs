@@ -134,6 +134,7 @@ public sealed partial class AccountErasureService(
         foreach (var offer in pendingOffers)
         {
             offer.Status = OfferStatuses.Rejected;
+            offer.ClosedReason = OfferClosedReasons.ListingClosed;
         }
     }
 

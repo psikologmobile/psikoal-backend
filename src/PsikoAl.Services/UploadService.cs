@@ -72,6 +72,42 @@ public sealed class UploadService(
         return expert.Certificates;
     }
 
+    public async Task<IReadOnlyList<string>> DeleteCertificateAsync(
+        Guid userId,
+        string? certificate,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(certificate))
+        {
+            throw new DomainException(ErrorKeys.ValidationFailed, "certificate");
+        }
+
+        var expert = await unitOfWork.Experts.GetByIdAsync(userId, cancellationToken)
+            ?? throw new DomainException(ErrorKeys.ExpertNotFound);
+
+        // İstemci değeri ExpertDto.certificates'ten aynen geri gönderir; birebir (ordinal)
+        // eşleşme dışında bir yorum yapılmaz ki başka bir öğe yanlışlıkla silinmesin.
+        if (!expert.Certificates.Contains(certificate, StringComparer.Ordinal))
+        {
+            throw new DomainException(ErrorKeys.CertificateNotFound, "certificate");
+        }
+
+        // Yükleme gibi silme de yayındaki profile doğrudan yazılır (PendingRevision'a düşmez):
+        // belgeler revizyon kapsamında değil, admin onları ayrı uçtan imzalayıp görür.
+        expert.Certificates = [.. expert.Certificates.Where(item => !string.Equals(item, certificate, StringComparison.Ordinal))];
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Storage silmesi service_role ile yapılıyor (RLS yok). Serbest metin döneminden kalan
+        // bir değer başka uzmanın klasörünü gösterebilir; yalnız kendi klasöründeki obje silinir,
+        // diğerleri yalnız listeden düşer.
+        if (ExpertDocumentPaths.IsOwnedBy(userId, certificate))
+        {
+            await TryDeleteStorageAsync("documents", certificate, cancellationToken);
+        }
+
+        return expert.Certificates;
+    }
+
     public async Task<string> UploadBlogCoverAsync(
         Guid blogId,
         Stream content,
@@ -82,6 +118,20 @@ public sealed class UploadService(
         var path = $"{blogId}/cover-{Guid.NewGuid():N}.{FileSignatures.ExtensionFor(contentType)}";
         await storage.UploadAsync(StorageBuckets.BlogMedia, path, validated, contentType, isPublicBucket: true, cancellationToken);
         return path;
+    }
+
+    // Kayıt zaten kaydedildi; Storage silmesi başarısız olursa yalnız sahipsiz bir dosya
+    // kalır (hesap silmede klasörle birlikte gider). Uzmanın işlemini bu yüzden düşürmek
+    // yanlış olur — liste güncellendi ama istemci hata görürdü.
+    private async Task TryDeleteStorageAsync(string bucket, string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await storage.DeleteObjectAsync(bucket, path, cancellationToken);
+        }
+        catch (DomainException)
+        {
+        }
     }
 
     private static async Task<Stream> ValidateAsync(

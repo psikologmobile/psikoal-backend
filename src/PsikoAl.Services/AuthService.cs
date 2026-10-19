@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using PsikoAl.Common.Constants;
 using PsikoAl.Common.Dtos.Auth;
@@ -21,7 +22,24 @@ public sealed class AuthService(
     {
         var session = await supabaseAuth.LoginAsync(request, cancellationToken);
         var profile = await GetActiveProfileAsync(session.UserId, cancellationToken);
+        await RecordLoginAsync(profile.Id, cancellationToken);
         return new LoginResponseDto(ProfileMapper.ToAuthUserDto(profile), session.Tokens);
+    }
+
+    // Admin "Kullanıcı işlem kaydı"ndaki giriş olayları (REVIZE-2 §9). Yalnız parola ile
+    // giriş yazılır; token yenileme (refresh) bir giriş değildir.
+    private async Task RecordLoginAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        await unitOfWork.AuditLogs.AddAsync(
+            new AuditLog
+            {
+                ActorType = AuditActorTypes.User,
+                Action = AuditActions.UserLogin,
+                EntityType = "profile",
+                EntityId = userId.ToString(),
+            },
+            cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<LoginResponseDto> RegisterAsync(RegisterRequestDto request, CancellationToken cancellationToken)
@@ -36,7 +54,7 @@ public sealed class AuthService(
             request.Role,
             cancellationToken);
 
-        await RecordConsentAsync(userId, cancellationToken);
+        await RecordConsentAsync(userId, request.ReferralCode, cancellationToken);
 
         return await LoginAsync(new LoginRequestDto(request.Email, request.Password), cancellationToken);
     }
@@ -84,7 +102,10 @@ public sealed class AuthService(
 
     // KVKK ispat yükü veri sorumlusundadır: rızanın ne zaman ve hangi metin sürümüne
     // verildiği profilde saklanır. Profil satırını auth.users trigger'ı açıyor.
-    private async Task RecordConsentAsync(Guid userId, CancellationToken cancellationToken)
+    //
+    // Davet kodu (REVIZE-2 §7) aynı kayıtta işlenir: geçersiz ya da bilinmeyen kod sessizce
+    // yok sayılır (kayıt bir davet kodu yüzünden başarısız olmamalı).
+    private async Task RecordConsentAsync(Guid userId, string? referralCode, CancellationToken cancellationToken)
     {
         var profile = await unitOfWork.Profiles.GetByIdAsync(userId, cancellationToken)
             ?? throw new DomainException(ErrorKeys.ProfileNotFound);
@@ -93,8 +114,27 @@ public sealed class AuthService(
         profile.TermsAcceptedAt = acceptedAt;
         profile.HealthDataConsentAt = acceptedAt;
         profile.ConsentVersion = legalOptions.Value.ConsentVersion;
+        profile.ReferredByExpertId = await ResolveReferrerAsync(userId, referralCode, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    private async Task<Guid?> ResolveReferrerAsync(Guid userId, string? referralCode, CancellationToken cancellationToken)
+    {
+        var code = referralCode?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(code) || code.Length > ReferralCodeMaxLength)
+        {
+            return null;
+        }
+
+        var expertId = await unitOfWork.Experts.Query()
+            .Where(expert => expert.ReferralCode == code)
+            .Select(expert => (Guid?)expert.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return expertId == userId ? null : expertId;
+    }
+
+    private const int ReferralCodeMaxLength = 32;
 
     private async Task<Profile> GetActiveProfileAsync(Guid userId, CancellationToken cancellationToken)
     {

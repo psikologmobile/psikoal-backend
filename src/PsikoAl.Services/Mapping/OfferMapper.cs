@@ -1,3 +1,4 @@
+using PsikoAl.Common.Dtos.Listing;
 using PsikoAl.Common.Dtos.Offer;
 using PsikoAl.Common.Presentation;
 using PsikoAl.Data.Entities;
@@ -6,7 +7,9 @@ namespace PsikoAl.Services.Mapping;
 
 public static class OfferMapper
 {
-    public static OfferDto ToOfferDto(Offer offer, bool viewerIsListingOwner, double expertRating)
+    // viewerIsListingOwner=false iken görüntüleyen teklifin sahibi uzmandır (servis bunu
+    // önceden doğrular). Ücret ve danışan iletişimi YALNIZ ona gösterilir.
+    public static OfferDto ToOfferDto(Offer offer, bool viewerIsListingOwner, double expertRating, bool claimed = false)
     {
         var listingDto = offer.Listing is { } listing ? ToListingEmbedDto(listing, viewerIsListingOwner) : null;
         var expertDto = offer.Expert is { Profile: { } profile } expert
@@ -19,6 +22,7 @@ public static class OfferMapper
                 expertRating)
             : null;
 
+        var isExpertView = !viewerIsListingOwner;
         return new OfferDto(
             offer.Id,
             offer.ListingId,
@@ -32,8 +36,23 @@ public static class OfferMapper
             offer.CreatedAt,
             RelativeTimeTr.From(offer.CreatedAt),
             listingDto,
-            expertDto);
+            expertDto,
+            isExpertView ? offer.FeePaidKurus : null,
+            isExpertView ? MoneyLabel.FeePaid(offer.FeePaidKurus, offer.UsedFreeRight) : null,
+            isExpertView && offer.UsedFreeRight,
+            offer.ClosedReason,
+            OfferStatusLabels.For(offer.Status, offer.ClosedReason),
+            isExpertView && claimed,
+            isExpertView ? ClientContactOf(offer.Listing) : null);
     }
+
+    // Danışan ilan açarken iletişim paylaşımına açık rıza verdiyse (REVIZE-2 §3.2) teklif
+    // veren uzman ad soyad, telefon ve e-postayı görür. Rıza kaydı olmayan (Revize 2 öncesi)
+    // ilanlarda hiçbir şey gösterilmez.
+    public static ListingClientContactDto? ClientContactOf(Listing? listing)
+        => listing is { ContactConsentAt: not null, Client: { } client }
+            ? new ListingClientContactDto($"{client.FirstName} {client.LastName}".Trim(), client.Phone, client.Email)
+            : null;
 
     private static OfferListingDto ToListingEmbedDto(Listing listing, bool viewerIsListingOwner)
     {

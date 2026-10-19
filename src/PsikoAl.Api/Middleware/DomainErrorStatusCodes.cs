@@ -11,6 +11,7 @@ public static class DomainErrorStatusCodes
     {
         ErrorKeys.ProfileNotFound,
         ErrorKeys.ExpertNotFound,
+        ErrorKeys.CertificateNotFound,
         ErrorKeys.CategoryNotFound,
         ErrorKeys.ReviewNotFound,
         ErrorKeys.ListingNotFound,
@@ -21,7 +22,9 @@ public static class DomainErrorStatusCodes
         ErrorKeys.PushTokenNotFound,
         ErrorKeys.AssessmentNotFound,
         ErrorKeys.AssessmentResultNotFound,
-        ErrorKeys.CreditPackageNotFound,
+        ErrorKeys.WalletPaymentNotFound,
+        ErrorKeys.InvoiceNotFound,
+        ErrorKeys.ClaimNotFound,
     };
 
     private static readonly HashSet<string> Forbidden = new(StringComparer.Ordinal)
@@ -32,16 +35,23 @@ public static class DomainErrorStatusCodes
         ErrorKeys.OfferExpertRoleRequired,
         ErrorKeys.ReviewClientRoleRequired,
         ErrorKeys.MatchNotParticipant,
+        ErrorKeys.ListingNotOwner,
+        ErrorKeys.TopupExpertNotApproved,
     };
 
+    // LISTING_NOT_OPEN 409: durum çakışması (REVIZE-2 §3.4) — ilan başka bir istekle
+    // eşleşti/kapandı; istemci ilanı yenileyip yeniden karar verir.
     private static readonly HashSet<string> Conflict = new(StringComparer.Ordinal)
     {
         ErrorKeys.ExpertProfileAlreadyExists,
         ErrorKeys.CategorySlugAlreadyExists,
         ErrorKeys.ReviewAlreadyExists,
         ErrorKeys.OfferAlreadyExists,
-        ErrorKeys.CreditPackageInUse,
         ErrorKeys.ResourceConflict,
+        ErrorKeys.ListingNotOpen,
+        ErrorKeys.OfferFeeChanged,
+        ErrorKeys.ClaimAlreadyExists,
+        ErrorKeys.ClaimAlreadyResolved,
     };
 
     public static int For(string errorKey)

@@ -1,4 +1,6 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using PsikoAl.Data.Entities;
 using PsikoAl.Data.Repositories.Abstractions;
 
@@ -25,11 +27,34 @@ public sealed class MatchRepository(AppDbContext dbContext)
             .ThenInclude(expert => expert!.Profile)
             .FirstOrDefaultAsync(match => match.Id == id, cancellationToken);
 
-    public async Task<Guid?> AcceptOfferAsync(Guid offerId, Guid actorClientId, CancellationToken cancellationToken)
+    // Ham ADO: fonksiyon üç kolon (biri uuid[]) döndürüyor.
+    public async Task<MarkMatchedOutcome> MarkListingMatchedAsync(
+        Guid listingId,
+        Guid offerId,
+        Guid actorClientId,
+        CancellationToken cancellationToken)
     {
-        var result = await DbContext.Database
-            .SqlQueryRaw<Guid>("select * from public.accept_offer({0}, {1})", offerId, actorClientId)
-            .ToListAsync(cancellationToken);
-        return result.Count > 0 ? result[0] : null;
+        var connection = DbContext.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+        {
+            await DbContext.Database.OpenConnectionAsync(cancellationToken);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select match_id, expert_id, other_expert_ids from public.mark_listing_matched(@listing, @offer, @client)";
+        command.Parameters.Add(new NpgsqlParameter("listing", listingId));
+        command.Parameters.Add(new NpgsqlParameter("offer", offerId));
+        command.Parameters.Add(new NpgsqlParameter("client", actorClientId));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException("mark_listing_matched satır döndürmedi.");
+        }
+
+        return new MarkMatchedOutcome(
+            reader.GetGuid(0),
+            reader.GetGuid(1),
+            reader.IsDBNull(2) ? [] : reader.GetFieldValue<Guid[]>(2));
     }
 }

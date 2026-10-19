@@ -22,6 +22,12 @@ public sealed class Offer
 
     public Guid? MatchId { get; set; }
 
+    public long FeePaidKurus { get; set; }
+
+    public bool UsedFreeRight { get; set; }
+
+    public string? ClosedReason { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

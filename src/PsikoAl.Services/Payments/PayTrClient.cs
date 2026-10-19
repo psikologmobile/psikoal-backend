@@ -12,7 +12,7 @@ namespace PsikoAl.Services.Payments;
 
 // PayTR iFrame API 1. adım: sunucudan get-token çağrısı.
 // Belge: https://dev.paytr.com/iframe-api/iframe-api-1-adim
-// Taksit kapalı (no_installment=1): kredi paketleri küçük tutarlı, vade farkı istenmiyor.
+// Taksit kapalı (no_installment=1): bakiye yüklemeleri küçük tutarlı, vade farkı istenmiyor.
 public sealed class PayTrClient(
     HttpClient httpClient,
     IOptions<PayTrOptions> options,

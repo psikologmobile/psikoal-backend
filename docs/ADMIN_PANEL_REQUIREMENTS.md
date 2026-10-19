@@ -99,11 +99,16 @@ Genel kural: her varlık için **listeleme (filtre + arama + sıralama + sayfala
 - Manuel sonlandırma: normalde RELEASED iki taraf onayı ister; **ihtilaf durumunda admin tek taraflı RELEASED/COMPLETED yapabilir** (sebep zorunlu, loglanır).
 - İhtilaf/şikayet kaydı: eşleşmeye not ekleme, taraflarla yazışma geçmişi (opsiyonel destek modülü).
 
-### 2.7 Uzman kredisi (eski "Ödemeler / cüzdan" bölümünün yerine — 2026-10-14)
-Danışan cüzdanı, seans paketi ve iade kuyruğu terk edildi. Sözleşme: `docs/PAYMENTS.md`.
-- **Satın Almalar** (`/credit-payments`): kim, hangi paket, kredi, tutar, PayTR sipariş no (`merchantOid`), durum (`PENDING / PAID / FAILED`); sayfalı, durum filtreli.
-- **Uzman kredisi** (Uzmanlar → Krediler sekmesi, Satın Almalar → Uzman Kredisi): bakiye + defter (sayfalı) + **elle düzeltme** (+/-, gerekçe zorunlu, onay diyaloğu, audit log; bakiye eksiye düşemez). Gerekçe uzmanın kredi geçmişinde görünür.
-- Harcanan kredi otomatik iade edilmez; telafi gerekirse elle düzeltme kullanılır.
+### 2.7 Uzman bakiyesi ve teklif ücreti (Revize 2 — 2026-10-19)
+2026-10-14 kredi modeli (kredi paketleri, satın almalar) **kaldırıldı**. Kanonik sözleşme:
+`docs/REVIZE-2.md` §9; uç ayrıntıları `docs/PAYMENTS.md`.
+- **Fiyatlandırma dönemleri**: liste (geçerli dönem vurgulu), yeni dönem ekleme (bütçe aralığı, ücret aralığı, günlük/teklif yüzdeleri, kalite ağırlıkları), önizleme hesaplayıcı (`/admin/pricing-periods`, `/preview`).
+- **Bakiye ve ödemeler**: ödemeler (durum, fatura var/yok süzgeci), **fatura yükle** (PDF ≤ 10 MB) (`/admin/wallet/payments`).
+- **Uzman cüzdanı** (Uzmanlar → Cüzdan sekmesi): bakiye, haklar, defter; **hediye** (bakiye ve/veya hak), **düzeltme** (gerekçe zorunlu; bakiye/hak eksiye düşemez) (`/admin/wallet/experts/{id}`).
+- **Kullanıcı işlem kaydı**: kişi bazlı zaman çizelgesi (kayıt, giriş, ilan, teklif, eşleşme, bakiye, bildirim, anlaşma bildirimi, admin işlemleri) (`/admin/users/{id}/activity`).
+- **Anlaşma bildirimleri** (moderasyon): açık / inceleme bekliyor / çözüldü, çözüm notu (`/admin/claims`).
+- **Davetler**: kim kimi davet etti, ödül yazıldı mı (`/admin/referrals`).
+- Ödenen teklif ücreti otomatik iade edilmez; telafi gerekirse hediye/düzeltme kullanılır.
 
 ### 2.8 Bildirimler (notifications)
 - Gönderilen bildirimlerin logu (tip, alıcı, okundu bilgisi).
@@ -163,10 +168,8 @@ assessment_score_rules:
 - Sonuç seviye etiketleri ("Düşük/Orta/Yüksek") ve seviye başına uzman yönlendirme CTA metni de admin'den düzenlenebilir.
 - Gönderilen test sonuçları (assessment-results) salt-okunur liste: skor dağılımı, email lead'leri (opsiyonel bırakılan emailler → pazarlama listesi ihracı).
 
-### 3.5 Kredi Paketleri (`credit_packages`) — finans
-- Seans paketleri terk edildi. Alanlar: `name`, `credits (> 0)`, `priceTry (> 0, 2 ondalık)`, `isActive`, `sortOrder`.
-- Sayfa: **Kredi Paketleri** (`/credit-packages`), finans rolü. Pasif paket web sitesinde listelenmez; satın alma geçmişi olan paket silinmez (409), pasife alınır.
-- Fiyat değişikliği audit log'a düşer; satın alma kaydı, alındığı andaki kredi ve tutarı saklar.
+### 3.5 Kredi Paketleri — KALDIRILDI (Revize 2)
+- Kredi paketleri yerine serbest TL yükleme var; hazır tutarlar `TOPUP_PRESETS_TRY` ayarından gelir (`docs/PAYMENTS.md`).
 
 ### 3.6 Bildirim Şablonları (yeni tablo: `notification_templates`)
 Şu an bildirim gövdeleri backend'de hazır string olarak üretiliyor — şablonlaştırılır:
@@ -216,7 +219,10 @@ Kodda sabit olan iş kuralları admin'den ayarlanabilir olur (key-value, tip ve 
 |---|---|---|
 | LISTING_MAX_ACTIVE | 3 | `listing.constants.ts` |
 | LISTING_EXPIRE_DAYS | 30 | `listing.constants.ts` |
-| OFFER_CREDIT_COST | 1 | teklif başına kredi (0–1000; 0 = ücretsiz) |
+| TOPUP_PRESETS_TRY / TOPUP_MIN_TRY / TOPUP_MAX_TRY | 500,1000,2500,5000 / 250 / 50000 | bakiye yükleme (Revize 2; `OFFER_CREDIT_COST` kaldırıldı) |
+| WELCOME_FREE_RIGHTS / REFERRAL_FREE_RIGHTS | 1 / 1 | onay ve davet ücretsiz teklif hakları |
+| CLAIMS_ENABLED / CLAIM_ADMIN_REVIEW_DAYS | true / 3 | "Danışanla anlaştım" bildirimi |
+| VAT_NOTE | KDV dahil | yükleme tutarlarının yanındaki not |
 | PACKAGE_VALID_DAYS / PACKAGE_MIN_SESSIONS / MAX_SESSIONS | 180 / 3 / 20 | **kullanılmıyor** — eski seans paketi modeli; satırlar DB'de duruyor (additive kuralı) |
 | NOTIFICATION_RATE_LIMIT | — | bildirim başına saatlik/günlük limit |
 | LISTING_AUTO_APPROVE | false | onay akışını acil durumda bypass etme anahtarı |

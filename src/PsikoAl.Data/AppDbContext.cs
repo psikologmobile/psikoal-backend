@@ -47,11 +47,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<BlogLike> BlogLikes => Set<BlogLike>();
 
-    public DbSet<CreditPackage> CreditPackages => Set<CreditPackage>();
+    public DbSet<PricingPeriod> PricingPeriods => Set<PricingPeriod>();
 
-    public DbSet<CreditPayment> CreditPayments => Set<CreditPayment>();
+    public DbSet<WalletPayment> WalletPayments => Set<WalletPayment>();
 
-    public DbSet<CreditTransaction> CreditTransactions => Set<CreditTransaction>();
+    public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
+
+    public DbSet<ListingClaim> ListingClaims => Set<ListingClaim>();
+
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -68,7 +72,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(expert => expert.Id);
             entity.Property(expert => expert.Id).ValueGeneratedNever();
             entity.Property(expert => expert.PendingRevision).HasColumnType("jsonb");
-            ConfigureStoreManagedBalance(entity.Property(expert => expert.CreditBalance));
+            ConfigureStoreManaged(entity.Property(expert => expert.BalanceKurus));
+            ConfigureStoreManaged(entity.Property(expert => expert.FreeOfferRights));
+            // Kodu insert trigger'ı üretir (trg_experts_referral_code); EF yalnız geri okur.
+            entity.Property(expert => expert.ReferralCode).ValueGeneratedOnAdd();
             entity.Property(expert => expert.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
             entity.Property(expert => expert.UpdatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
             entity.HasOne(expert => expert.Profile)
@@ -110,6 +117,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(listing => listing.Id);
             entity.Property(listing => listing.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
             entity.Property(listing => listing.UpdatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
+            entity.Property(listing => listing.QualityScore).HasColumnType("numeric(4,3)");
+            entity.Property(listing => listing.DailyDecayPct).HasColumnType("numeric(5,2)");
+            entity.Property(listing => listing.PerOfferDecayPct).HasColumnType("numeric(5,2)");
             entity.HasOne(listing => listing.Client)
                 .WithMany()
                 .HasForeignKey(listing => listing.ClientId);
@@ -250,42 +260,50 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(like => like.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
         });
 
-        modelBuilder.Entity<CreditPackage>(entity =>
+        modelBuilder.Entity<PricingPeriod>(entity =>
         {
-            entity.ToTable("credit_packages");
-            entity.HasKey(package => package.Id);
-            entity.Property(package => package.PriceTry).HasColumnType("numeric(10,2)");
-            entity.Property(package => package.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
-            entity.Property(package => package.UpdatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
+            entity.ToTable("pricing_periods");
+            entity.HasKey(period => period.Id);
+            entity.Property(period => period.QualityWeights).HasColumnType("jsonb");
+            entity.Property(period => period.DailyDecayPct).HasColumnType("numeric(5,2)");
+            entity.Property(period => period.PerOfferDecayPct).HasColumnType("numeric(5,2)");
+            entity.Property(period => period.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
+            entity.HasOne(period => period.CreatedByAdmin)
+                .WithMany()
+                .HasForeignKey(period => period.CreatedBy)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
-        modelBuilder.Entity<CreditPayment>(entity =>
+        modelBuilder.Entity<WalletPayment>(entity =>
         {
-            entity.ToTable("credit_payments");
+            entity.ToTable("wallet_payments");
             entity.HasKey(payment => payment.Id);
             entity.HasIndex(payment => payment.MerchantOid).IsUnique();
-            entity.Property(payment => payment.AmountTry).HasColumnType("numeric(10,2)");
             entity.Property(payment => payment.ProviderPayload).HasColumnType("jsonb");
             entity.Property(payment => payment.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
             entity.HasOne(payment => payment.Expert)
                 .WithMany()
                 .HasForeignKey(payment => payment.ExpertId);
-            entity.HasOne(payment => payment.Package)
+            entity.HasOne(payment => payment.InvoiceUploader)
                 .WithMany()
-                .HasForeignKey(payment => payment.PackageId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .HasForeignKey(payment => payment.InvoiceUploadedBy)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
-        modelBuilder.Entity<CreditTransaction>(entity =>
+        modelBuilder.Entity<WalletTransaction>(entity =>
         {
-            entity.ToTable("credit_transactions");
+            entity.ToTable("wallet_transactions");
             entity.HasKey(transaction => transaction.Id);
             entity.Property(transaction => transaction.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
-            entity.HasOne(transaction => transaction.Offer)
+            entity.HasOne(transaction => transaction.Listing)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.ListingId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<Offer>()
                 .WithMany()
                 .HasForeignKey(transaction => transaction.OfferId)
                 .OnDelete(DeleteBehavior.SetNull);
-            entity.HasOne(transaction => transaction.Payment)
+            entity.HasOne<WalletPayment>()
                 .WithMany()
                 .HasForeignKey(transaction => transaction.PaymentId)
                 .OnDelete(DeleteBehavior.SetNull);
@@ -294,12 +312,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 .HasForeignKey(transaction => transaction.AdminUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<ListingClaim>(entity =>
+        {
+            entity.ToTable("listing_claims");
+            entity.HasKey(claim => claim.Id);
+            entity.HasIndex(claim => new { claim.ListingId, claim.ExpertId }).IsUnique();
+            entity.Property(claim => claim.CreatedAt).HasDefaultValueSql("now()").ValueGeneratedOnAdd();
+            entity.HasOne(claim => claim.Listing)
+                .WithMany()
+                .HasForeignKey(claim => claim.ListingId);
+            entity.HasOne(claim => claim.Expert)
+                .WithMany()
+                .HasForeignKey(claim => claim.ExpertId);
+            entity.HasOne(claim => claim.Resolver)
+                .WithMany()
+                .HasForeignKey(claim => claim.ResolvedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
     }
 
-    // Bakiye yalnız koşullu UPDATE ile değişir (ExpertCreditRepository). EF bu kolonu
-    // ASLA yazmaz: izlenen bir Expert kaydedilirken bayat bakiye atomik düşümün üzerine
-    // yazılamasın. Ekleme anında da gönderilmez; veritabanı varsayılanı (0) geçerlidir.
-    private static void ConfigureStoreManagedBalance(PropertyBuilder<int> property)
+    // Bakiye ve ücretsiz hak yalnız koşullu UPDATE ile değişir (ExpertWalletRepository). EF
+    // bu kolonları ASLA yazmaz: izlenen bir Expert kaydedilirken bayat değer atomik düşümün
+    // üzerine yazılamasın. Ekleme anında da gönderilmez; veritabanı varsayılanı (0) geçerlidir.
+    private static void ConfigureStoreManaged(PropertyBuilder property)
     {
         property.Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore);
         property.Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);

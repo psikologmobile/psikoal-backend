@@ -8,6 +8,6 @@ public sealed class PayTrInitRequestDtoValidator : AbstractValidator<PayTrInitRe
 {
     public PayTrInitRequestDtoValidator()
     {
-        RuleFor(request => request.PackageId).NotEmpty().WithMessage(ErrorKeys.ValidationFailed);
+        RuleFor(request => request.AmountKurus).GreaterThan(0).WithMessage(ErrorKeys.ValidationFailed);
     }
 }

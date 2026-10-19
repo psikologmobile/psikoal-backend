@@ -37,9 +37,10 @@
 
 ### Uzman kredisi (eski "Payment" bölümünün yerine — 2026-10-14)
 - Danışan ödemesi (cüzdan, seans paketi, `/payment/*`, Iyzico) **terk edildi**; mock'taki `/payment/packages`, `/payment/wallet`, `/payment/checkout/initiate` uçları gerçek backend'de **yazılmayacak** ve uygulamadan sökülür.
-- Yeni model: uzman teklif gönderirken kredi harcar; kredi yalnız web sitesinden PayTR ile alınır. Mobil yalnız `GET /credits/me` ve `GET /credits/transactions` kullanır; satın alma yolu yoktur (App Store kuralı).
-- `POST /offers` bakiye yetmezse 422 `INSUFFICIENT_CREDITS`.
-- Uç şekilleri, hata kodları ve web ödeme sözleşmesi: **`docs/PAYMENTS.md`** (kanonik).
+- **Revize 2 (2026-10-19):** kredi modeli kaldırıldı. Uzman TL bakiyesi + ücretsiz teklif hakkı; teklif gönderirken o anki **dinamik teklif ücreti** öder. Bakiye yalnız web sitesinden PayTR ile yüklenir. Mobil `GET /wallet/me`, `/wallet/transactions`, `/wallet/payments`, `/offers/quote` kullanır; yükleme yolu yoktur (App Store kuralı).
+- `POST /offers` gövdesinde `expectedFeeKurus`; ücret değiştiyse 409 `OFFER_FEE_CHANGED`, bakiye yetmezse 422 `INSUFFICIENT_BALANCE`.
+- Kabul/ret uçları kalktı: danışan `POST /listings/{id}/match` ile "eşleşti" işaretler.
+- Kanonik sözleşme: **`docs/REVIZE-2.md`**; ödeme/cüzdan ayrıntısı: **`docs/PAYMENTS.md`**.
 
 ### Blog
 - `GET /blogs` → param `category`, `limit` (ana sayfa 3 öğe için `limit=3` kullanır). Her blog: `liked` (oturum kullanıcısı beğenmiş mi), `likeCount`.
@@ -90,6 +91,17 @@
   uzman belgeleri ve Storage klasörleri temizlenir.
 - **Uzman belgeleri:** `cvUrl`/`certificates` profil uçlarında yok sayılır (yalnız yükleme
   uçları yazar); admin imzalaması yalnız `{expertId}/` altını imzalar; en çok 10 sertifika.
+  Uçlar: `POST /experts/profile/cv` (multipart `file`) → `{ cvUrl }`;
+  `POST /experts/profile/certificates` (multipart `file`) → `{ certificates }`;
+  `DELETE /experts/profile/certificates?certificate=<ExpertDto.certificates'teki değer, URL-encoded>`
+  → `{ certificates }` (kalan liste). Silme birebir eşleşir; listede yoksa 404
+  `CERTIFICATE_NOT_FOUND`, uzman profili yoksa 404 `EXPERT_NOT_FOUND`, değer boşsa 422
+  `VALIDATION_FAILED` (`field: certificate`). Yükleme gibi doğrudan uygulanır (revizyon
+  onayına düşmez), yükleme rate limit politikası geçerli; Storage objesi yalnız uzmanın kendi
+  klasöründeyse silinir, obje zaten yoksa hata sayılmaz.
+- **Red gerekçesi:** `ExpertDto.rejectionReason` yalnız uzman kendi profilini okurken
+  (`GET /experts/{kendi id}`, `POST/PATCH /experts/profile`) dolar; diğer izleyicilere ve
+  admin detayındaki gömülü DTO'ya `null` gider (admin gerekçeyi kendi alanından okur).
 - **Push:** kilit ekranı metni türe göre geneldir; `data` = `{ type, entityId }`.
 - **Paylaşım:** `shareEmail/sharePhone/shareLocation` yeni hesaplarda varsayılan `false`.
 - **PostgREST:** public tabloları anon/authenticated rollerine kapalı; tek giriş noktası API.

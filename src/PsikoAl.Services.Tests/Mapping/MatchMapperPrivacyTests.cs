@@ -3,36 +3,27 @@ using PsikoAl.Services.Mapping;
 
 namespace PsikoAl.Services.Tests.Mapping;
 
-// Sözleşme kilidi: psikoal-app / src/app/profile/personal.tsx -> "İletişim Paylaşımı".
-// Ekran kullanıcıya birebir şunu vaat ediyor: "Eşleşme sağlandığında SEÇTİĞİNİZ
-// bilgiler uzmanla paylaşılır", altında "Uzman e-posta adresinizi görebilir" ve
-// "Uzman telefon numaranızı görebilir" anahtarları.
+// Sözleşme kilidi: docs/REVIZE-2.md §5 — "Eşleşme detayında iki taraf da karşı tarafın
+// phone ve email'ini görür (uzman profilindeki telefon, auth e-postası)".
 //
-// Bu bayraklar bir dönem yalnız yazılıp geri okunuyordu; hiçbir yerde veriyi
-// süzmüyorlardı. Kullanıcı anahtarı kapatıyor, uygulama kabul ediyor, bilgi yine de
-// uzmana gidiyordu. Belirtisi yoktu: ne hata, ne uyarı — kullanıcı kendi bilgisinin
-// paylaşıldığını hiçbir şekilde göremezdi. KVKK açısından sessiz bir ihlal.
+// Eskiden profildeki "İletişim Paylaşımı" anahtarları eşleşmedeki iletişimi süzüyordu.
+// Revize 2 ile danışan iletişim paylaşımına İLAN AÇARKEN açık rıza veriyor ve uzman bu
+// bilgiyi teklif gönderdiği anda zaten görüyor; eşleşmede saklamak tutarsız olurdu. Bu
+// testler, eski süzmenin geri gelip eşleşmiş iki tarafı birbirine ulaşamaz bırakmasını
+// engelliyor.
 public sealed class MatchMapperPrivacyTests
 {
     [Theory]
     [InlineData(true, true)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
     [InlineData(false, false)]
-    public void ToMatchDto_SharesContactOnlyWhenTheClientAllowedIt(bool shareEmail, bool sharePhone)
+    public void ToMatchDto_RevealsClientContactRegardlessOfShareFlags(bool shareEmail, bool sharePhone)
     {
-        var match = CreateMatch(shareEmail, sharePhone);
+        var dto = MatchMapper.ToMatchDto(CreateMatch(shareEmail, sharePhone));
 
-        var dto = MatchMapper.ToMatchDto(match);
-
-        Assert.Equal(shareEmail ? "danisan@psikoal.test" : null, dto.Client?.Email);
-        Assert.Equal(sharePhone ? "+905551112233" : null, dto.Client?.Phone);
+        Assert.Equal("danisan@psikoal.test", dto.Client?.Email);
+        Assert.Equal("+905551112233", dto.Client?.Phone);
     }
 
-    // Ad ve baş harfler bayraklardan BAĞIMSIZ: eşleşme sonrası tam adın görünmesi
-    // ürün kuralı (danışan teklifi kabul ederken bunu açıkça onaylıyor). Süzme
-    // yanlışlıkla ada da uygulanırsa uzman kiminle çalıştığını bilemez; bu iddia
-    // düzeltmenin fazla geniş uygulanmasını engelliyor.
     [Fact]
     public void ToMatchDto_AlwaysRevealsTheClientFullName()
     {
@@ -42,11 +33,10 @@ public sealed class MatchMapperPrivacyTests
         Assert.Equal("AY", dto.Client?.Initials);
     }
 
-    // Uzmanın iletişimi de danışana yalnız uzmanın kendi tercihiyle gider; iki yön aynı kural.
     [Theory]
     [InlineData(true, true)]
     [InlineData(false, false)]
-    public void ToMatchDto_SharesExpertContactOnlyWhenTheExpertAllowedIt(bool shareEmail, bool sharePhone)
+    public void ToMatchDto_RevealsExpertPhoneAndAccountEmail(bool shareEmail, bool sharePhone)
     {
         var match = CreateMatch(shareEmail: false, sharePhone: false);
         match.Expert = new Expert
@@ -70,8 +60,8 @@ public sealed class MatchMapperPrivacyTests
         var dto = MatchMapper.ToMatchDto(match);
 
         Assert.Equal("Deniz Kaya", dto.Expert?.Name);
-        Assert.Equal(shareEmail ? "uzman@psikoal.test" : null, dto.Expert?.Email);
-        Assert.Equal(sharePhone ? "+905559998877" : null, dto.Expert?.Phone);
+        Assert.Equal("uzman@psikoal.test", dto.Expert?.Email);
+        Assert.Equal("+905559998877", dto.Expert?.Phone);
     }
 
     private static Match CreateMatch(bool shareEmail, bool sharePhone)
@@ -84,7 +74,7 @@ public sealed class MatchMapperPrivacyTests
             ClientId = clientId,
             ExpertId = Guid.NewGuid(),
             ListingId = Guid.NewGuid(),
-            Status = "RELEASED",
+            Status = "ACTIVE",
             CreatedAt = DateTimeOffset.UtcNow,
             Client = new Profile
             {

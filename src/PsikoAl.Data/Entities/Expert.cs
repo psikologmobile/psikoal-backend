@@ -32,7 +32,13 @@ public sealed class Expert
 
     public string? PendingRevision { get; set; }
 
-    public int CreditBalance { get; set; }
+    // Üçü de veritabanının yönetiminde (AppDbContext): bakiye ve hak yalnız koşullu
+    // UPDATE ile değişir, kod ise insert trigger'ıyla üretilir.
+    public long BalanceKurus { get; set; }
+
+    public int FreeOfferRights { get; set; }
+
+    public string? ReferralCode { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

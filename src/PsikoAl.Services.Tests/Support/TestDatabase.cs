@@ -63,5 +63,25 @@ public sealed class TestDatabase : IDisposable
         return result;
     }
 
+    // Revize 2: ilan ve teklif akışları geçerli fiyatlandırma dönemini okur (başlangıç dönemi).
+    public async Task<PricingPeriod> AddPricingPeriodAsync()
+    {
+        var period = new PricingPeriod
+        {
+            Id = Guid.NewGuid(),
+            EffectiveFrom = DateTimeOffset.UtcNow.AddDays(-1),
+            BudgetMinTry = 500,
+            FeeMinTry = 250,
+            FeeMaxTry = 1000,
+            DailyDecayPct = 10,
+            PerOfferDecayPct = 10,
+            QualityWeights = PsikoAl.Services.Pricing.QualityWeights.Default.ToJson(),
+        };
+
+        Context.PricingPeriods.Add(period);
+        await Context.SaveChangesAsync();
+        return period;
+    }
+
     public void Dispose() => Context.Dispose();
 }

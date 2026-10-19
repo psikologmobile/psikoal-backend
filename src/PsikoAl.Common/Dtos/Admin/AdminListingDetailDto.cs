@@ -14,4 +14,11 @@ public sealed record AdminListingDetailDto(
     string? RejectionReason,
     DateTimeOffset? ApprovedAt,
     DateTimeOffset? ExpiresAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    decimal? QualityScore,
+    long? FeeInitialKurus,
+    long? CurrentFeeKurus,
+    string? CurrentFeeLabel,
+    int OfferCount,
+    Guid? InvitedExpertId,
+    DateTimeOffset? ContactConsentAt);

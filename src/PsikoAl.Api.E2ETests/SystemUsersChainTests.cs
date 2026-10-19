@@ -648,6 +648,8 @@ public sealed class SystemUsersChainTests(E2EFixture fixture)
                 budgetMin = 500m,
                 budgetMax = 1500m,
                 preferredSessionType = "online",
+                contactConsent = true,
+                phone = "05551112233",
 
                 // Şehir BİLEREK gönderilmiyor: mobil şemadaki city .optional()/null
                 // uyuşmazlığı ancak şehirsiz bir ilanla ölçülebilir.

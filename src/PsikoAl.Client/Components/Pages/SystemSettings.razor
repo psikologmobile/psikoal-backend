@@ -4,7 +4,7 @@
 <PageTitle>Sistem Ayarları — PsikoAl Admin</PageTitle>
 
 <PageHeader Title="Sistem Ayarları"
-            Description="Bu değerler geriye dönük etkilemez — yalnızca bundan sonra oluşan kayıtlara uygulanır." />
+            Description="Bu değerler geriye dönük etkilemez — yalnızca bundan sonra oluşan kayıtlara uygulanır. Teklif ücreti ve bütçe aralığı burada değil, Fiyatlandırma sayfasındaki dönemlerdedir." />
 
 @if (_errorMessage is not null)
 {
@@ -13,7 +13,14 @@
     </Alert>
 }
 
-<Card Class="table-card">
+@if (_infoMessage is not null)
+{
+    <Alert Class="mb-4">
+        <AlertDescription>@_infoMessage</AlertDescription>
+    </Alert>
+}
+
+<Card Class="table-card" data-testid="settings-table">
     @if (_isLoading)
     {
         <LoadingSkeleton />
@@ -36,16 +43,45 @@
             <TableBody>
                 @foreach (var setting in _settings)
                 {
+                    var editor = EditorFor(setting.Key);
+                    var current = _editValues.GetValueOrDefault(setting.Key, setting.Value);
+                    var error = Validate(setting.Key, current);
                     <TableRow>
                         <TableCell Class="font-medium">@setting.Key</TableCell>
                         <TableCell Class="text-muted-foreground">@setting.Description</TableCell>
                         <TableCell>
-                            <Input Class="w-48"
-                                   Value="@_editValues.GetValueOrDefault(setting.Key, setting.Value)"
-                                   ValueChanged="value => _editValues[setting.Key] = value" />
+                            @switch (editor.Kind)
+                            {
+                                case EditorKind.Boolean:
+                                    <Select Class="w-48" data-testid="@($"setting-{setting.Key}")"
+                                            Value="@current" ValueChanged="value => _editValues[setting.Key] = value">
+                                        <option value="true">Açık</option>
+                                        <option value="false">Kapalı</option>
+                                    </Select>
+                                    break;
+                                case EditorKind.Number:
+                                    <Input Class="w-48" Type="number" data-testid="@($"setting-{setting.Key}")"
+                                           Value="@current" ValueChanged="value => _editValues[setting.Key] = value" />
+                                    break;
+                                default:
+                                    <Input Class="w-48" data-testid="@($"setting-{setting.Key}")"
+                                           Value="@current" ValueChanged="value => _editValues[setting.Key] = value" />
+                                    break;
+                            }
+                            @if (editor.Hint is not null)
+                            {
+                                <div class="muted">@editor.Hint</div>
+                            }
+                            @if (error is not null)
+                            {
+                                <p class="field-error">@error</p>
+                            }
                         </TableCell>
                         <TableCell Class="cell-actions">
-                            <Button Size="ButtonSize.Sm" OnClick="() => SaveAsync(setting.Key)">Kaydet</Button>
+                            <Button Size="ButtonSize.Sm" Disabled="@(error is not null || current == setting.Value)"
+                                    OnClick="() => SaveAsync(setting.Key)">
+                                Kaydet
+                            </Button>
                         </TableCell>
                     </TableRow>
                 }
@@ -55,12 +91,78 @@
 </Card>
 
 @code {
+    private enum EditorKind
+    {
+        Text,
+        Number,
+        Boolean,
+    }
+
+    private sealed record SettingEditor(EditorKind Kind, string? Hint = null);
+
+    // Bilinen anahtarların düzenleyicisi. Listede olmayan anahtar düz metin kutusuyla
+    // açılır — yeni bir migration anahtarı panel güncellenmeden de düzenlenebilsin.
+    private static readonly Dictionary<string, SettingEditor> Editors = new(StringComparer.Ordinal)
+    {
+        [SystemSettingKeys.ListingMaxActive] = new(EditorKind.Number, "Danışan başına ilan"),
+        [SystemSettingKeys.ListingExpireDays] = new(EditorKind.Number, "Gün"),
+        [SystemSettingKeys.ListingAutoApprove] = new(EditorKind.Boolean),
+        [SystemSettingKeys.PackageValidDays] = new(EditorKind.Number, "Gün"),
+        [SystemSettingKeys.PackageMinSessions] = new(EditorKind.Number, "Seans"),
+        [SystemSettingKeys.PackageMaxSessions] = new(EditorKind.Number, "Seans"),
+        [SystemSettingKeys.MaintenanceMode] = new(EditorKind.Boolean),
+        ["KEEP_ALIVE_ENABLED"] = new(EditorKind.Boolean),
+        ["KEEP_ALIVE_URL"] = new(EditorKind.Text, "Yalnız https adresi"),
+        [SystemSettingKeys.TopupPresetsTry] = new(EditorKind.Text, "TL, virgülle ayrılmış pozitif tam sayılar (ör. 500,1000,2500)"),
+        [SystemSettingKeys.TopupMinTry] = new(EditorKind.Number, "₺ · en az yükleme (1–1.000.000)"),
+        [SystemSettingKeys.TopupMaxTry] = new(EditorKind.Number, "₺ · en çok yükleme (1–1.000.000)"),
+        [SystemSettingKeys.WelcomeFreeRights] = new(EditorKind.Number, $"Ücretsiz teklif hakkı (0–{WalletFieldLimits.AdminMaxFreeRights}) · uzman ilk onaylandığında"),
+        [SystemSettingKeys.ReferralFreeRights] = new(EditorKind.Number, $"Ücretsiz teklif hakkı (0–{WalletFieldLimits.AdminMaxFreeRights}) · davet ettiği uzman onaylanınca"),
+        [SystemSettingKeys.ClaimsEnabled] = new(EditorKind.Boolean, "Kapalıyken uzman \"Danışanla anlaştım\" bildirimi gönderemez"),
+        [SystemSettingKeys.ClaimAdminReviewDays] = new(EditorKind.Number, "Gün (0–365) · bu süre sonunda eşleşmeyen bildirim incelemeye düşer"),
+        [SystemSettingKeys.VatNote] = new(EditorKind.Text, "En çok 100 karakter · yükleme tutarlarının yanında görünür"),
+    };
+
     private IReadOnlyList<SystemSettingDto>? _settings;
     private readonly Dictionary<string, string> _editValues = [];
     private bool _isLoading = true;
     private string? _errorMessage;
+    private string? _infoMessage;
 
     protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static SettingEditor EditorFor(string key) => Editors.GetValueOrDefault(key) ?? new SettingEditor(EditorKind.Text);
+
+    // API'deki SystemSettingsService.EnsureValidValue ile aynı kurallar (Revize 2 anahtarları).
+    private static string? Validate(string key, string value)
+    {
+        static bool Whole(string text, long min, long max, out long number)
+            => long.TryParse(text.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out number)
+                && number >= min && number <= max;
+
+        if (string.IsNullOrWhiteSpace(value) && key != "KEEP_ALIVE_URL")
+        {
+            return "Boş bırakılamaz.";
+        }
+
+        return key switch
+        {
+            SystemSettingKeys.TopupPresetsTry when !value.Split(',').All(part => Whole(part, 1, 1_000_000, out _))
+                => "Virgülle ayrılmış pozitif tam TL tutarları girin.",
+            SystemSettingKeys.TopupMinTry or SystemSettingKeys.TopupMaxTry when !Whole(value, 1, 1_000_000, out _)
+                => "1 ile 1.000.000 arasında tam TL girin.",
+            SystemSettingKeys.WelcomeFreeRights or SystemSettingKeys.ReferralFreeRights
+                when !Whole(value, 0, WalletFieldLimits.AdminMaxFreeRights, out _)
+                => $"0 ile {WalletFieldLimits.AdminMaxFreeRights} arasında tam sayı girin.",
+            SystemSettingKeys.ClaimAdminReviewDays when !Whole(value, 0, 365, out _)
+                => "0 ile 365 arasında gün girin.",
+            SystemSettingKeys.VatNote when value.Length > 100
+                => "En çok 100 karakter.",
+            _ when EditorFor(key).Kind == EditorKind.Boolean && value is not ("true" or "false")
+                => "Açık ya da Kapalı seçin.",
+            _ => null,
+        };
+    }
 
     private async Task LoadAsync()
     {
@@ -71,6 +173,7 @@
             var result = await AdminClient.ListSystemSettingsAsync(CancellationToken.None);
             _settings = result.Value;
             _errorMessage = result.ErrorMessage;
+            _editValues.Clear();
         }
         finally
         {
@@ -80,21 +183,21 @@
 
     private async Task SaveAsync(string key)
     {
-        var value = _editValues.GetValueOrDefault(key);
-        if (string.IsNullOrWhiteSpace(value))
+        if (!_editValues.TryGetValue(key, out var value) || Validate(key, value) is not null)
         {
             return;
         }
 
-        var result = await AdminClient.UpdateSystemSettingAsync(key, value, CancellationToken.None);
-        _errorMessage = result.ErrorMessage;
+        _errorMessage = _infoMessage = null;
+        var result = await AdminClient.UpdateSystemSettingAsync(key, value.Trim(), CancellationToken.None);
         if (result.Succeeded)
         {
+            _infoMessage = $"{key} kaydedildi.";
             await LoadAsync();
         }
         else
         {
-            _errorMessage = $"{key} güncellenemedi.";
+            _errorMessage = $"{key} güncellenemedi: {result.ErrorMessage}";
         }
     }
 }

@@ -50,39 +50,4 @@ public sealed class MatchService(IUnitOfWork unitOfWork) : IMatchService
 
         return MatchMapper.ToMatchDto(match);
     }
-
-    public async Task<MatchDto> ReleaseAsync(Guid actorUserId, Guid matchId, string? reason, CancellationToken cancellationToken)
-    {
-        var match = await unitOfWork.Matches.GetWithDetailsAsync(matchId, cancellationToken)
-            ?? throw new DomainException(ErrorKeys.MatchNotFound);
-
-        var isClient = match.ClientId == actorUserId;
-        var isExpert = match.ExpertId == actorUserId;
-        if (!isClient && !isExpert)
-        {
-            throw new DomainException(ErrorKeys.MatchNotParticipant);
-        }
-
-        if (match.Status != MatchStatuses.Active)
-        {
-            throw new DomainException(ErrorKeys.MatchNotActive);
-        }
-
-        if (isClient)
-        {
-            match.ClientReleasedAt ??= DateTimeOffset.UtcNow;
-        }
-        else
-        {
-            match.ExpertReleasedAt ??= DateTimeOffset.UtcNow;
-        }
-
-        if (match.ClientReleasedAt is not null && match.ExpertReleasedAt is not null)
-        {
-            match.Status = MatchStatuses.Released;
-        }
-
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        return MatchMapper.ToMatchDto(match);
-    }
 }

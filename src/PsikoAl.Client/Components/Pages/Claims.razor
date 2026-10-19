@@ -1,0 +1,189 @@
+@page "/claims"
+@inject IAdminClientService AdminClient
+
+<PageTitle>Anlaşma Bildirimleri — PsikoAl Admin</PageTitle>
+
+<PageHeader Title="Anlaşma Bildirimleri"
+            Description="Uzmanın &quot;Danışanla anlaştım&quot; bildirimleri. Bildirimden sonra ayarlardaki inceleme süresi (CLAIM_ADMIN_REVIEW_DAYS) geçtiği hâlde ilan eşleşmediyse kayıt &quot;İnceleme bekliyor&quot; olur. Ücret iadesi yoktur; çözüm notu denetim kaydına yazılır." />
+
+<div class="toolbar">
+    <Select Class="toolbar-select" data-testid="claims-status" @bind-Value="_status">
+        <option value="@ClaimStatuses.ReviewPending">İnceleme bekliyor</option>
+        <option value="@ClaimStatuses.Open">Açık</option>
+        <option value="@ClaimStatuses.Resolved">Çözüldü</option>
+        <option value="">Tümü</option>
+    </Select>
+    <Button Disabled="_isLoading" data-testid="claims-filter" OnClick="FilterAsync">Filtrele</Button>
+</div>
+
+@if (_errorMessage is not null)
+{
+    <Alert Variant="AlertVariant.Destructive" Class="mb-4">
+        <AlertDescription>@_errorMessage</AlertDescription>
+    </Alert>
+}
+
+@if (_infoMessage is not null)
+{
+    <Alert Class="mb-4">
+        <AlertDescription>@_infoMessage</AlertDescription>
+    </Alert>
+}
+
+<Card Class="table-card" data-testid="claims-table">
+    @if (_isLoading)
+    {
+        <LoadingSkeleton />
+    }
+    else if (_claims is { Count: 0 })
+    {
+        <EmptyState Title="Bildirim yok" Description="Seçtiğiniz durumda anlaşma bildirimi bulunmuyor." />
+    }
+    else if (_claims is not null)
+    {
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>İlan</TableHead>
+                    <TableHead>Uzman</TableHead>
+                    <TableHead>Danışan</TableHead>
+                    <TableHead>Bildirim</TableHead>
+                    <TableHead>Not</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead Class="text-right">İşlem</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                @foreach (var claim in _claims)
+                {
+                    <TableRow>
+                        <TableCell>
+                            @claim.ListingTitle
+                            <div><StatusChip Status="@claim.ListingStatus" /></div>
+                        </TableCell>
+                        <TableCell>@claim.ExpertName</TableCell>
+                        <TableCell>
+                            @claim.ClientName
+                            @if (claim.DismissedAt is { } dismissedAt)
+                            {
+                                <div class="muted">"Anlaşmadım" dedi · @AdminFormat.DateTime(dismissedAt)</div>
+                            }
+                        </TableCell>
+                        <TableCell Class="text-muted-foreground">@AdminFormat.DateTime(claim.CreatedAt)</TableCell>
+                        <TableCell Class="max-w-sm">@(claim.Note ?? "—")</TableCell>
+                        <TableCell>
+                            <StatusChip Status="@ChipStatus(claim.Status)" Label="@claim.StatusLabel" />
+                            @if (claim.ResolvedAt is { } resolvedAt)
+                            {
+                                <div class="muted">@(claim.ResolvedByName ?? "Admin") · @AdminFormat.DateTime(resolvedAt)</div>
+                                <div class="muted">@claim.ResolutionNote</div>
+                            }
+                        </TableCell>
+                        <TableCell Class="cell-actions">
+                            @if (claim.ResolvedAt is null)
+                            {
+                                <Button Size="ButtonSize.Sm" data-testid="claim-resolve" OnClick="() => AskResolve(claim)">Çöz</Button>
+                            }
+                        </TableCell>
+                    </TableRow>
+                }
+            </TableBody>
+        </Table>
+        <Pager Meta="_meta" Disabled="_isLoading" OnPageChanged="GoToPageAsync" />
+    }
+</Card>
+
+<ReasonDialog Open="_isResolveOpen"
+              OpenChanged="value => _isResolveOpen = value"
+              Title="Bildirimi çöz"
+              Description="@ResolveDescription"
+              ReasonLabel="Çözüm notu"
+              Placeholder="Danışanla görüşüldü, eşleşme işaretlendi / uzman uyarıldı..."
+              ConfirmLabel="Çözüldü olarak işaretle"
+              ConfirmVariant="ButtonVariant.Default"
+              OnConfirm="ResolveConfirmedAsync" />
+
+@code {
+    private const int PerPage = 25;
+
+    private IReadOnlyList<AdminClaimDto>? _claims;
+    private AdminPageMetaDto? _meta;
+    private int _page = 1;
+    private string _status = ClaimStatuses.ReviewPending;
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private string? _infoMessage;
+    private bool _isResolveOpen;
+    private AdminClaimDto? _pendingClaim;
+
+    private string ResolveDescription
+        => _pendingClaim is { } claim
+            ? $"\"{claim.ListingTitle}\" — {claim.ExpertName} / {claim.ClientName}. Not denetim kaydına yazılır (en çok {WalletFieldLimits.ReasonMaxLength} karakter)."
+            : string.Empty;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task FilterAsync()
+    {
+        _page = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _page = page;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var result = await AdminClient.ListClaimsAsync(
+                new AdminClaimQueryDto(string.IsNullOrEmpty(_status) ? null : _status, _page, PerPage),
+                CancellationToken.None);
+            _claims = result.Value?.Data;
+            _meta = result.Value?.Meta;
+            _errorMessage = result.ErrorMessage;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void AskResolve(AdminClaimDto claim)
+    {
+        _pendingClaim = claim;
+        _infoMessage = null;
+        _isResolveOpen = true;
+    }
+
+    private async Task ResolveConfirmedAsync(string note)
+    {
+        if (_pendingClaim is not { } claim)
+        {
+            return;
+        }
+
+        _pendingClaim = null;
+        if (note.Length > WalletFieldLimits.ReasonMaxLength)
+        {
+            _errorMessage = $"Çözüm notu en çok {WalletFieldLimits.ReasonMaxLength} karakter olabilir.";
+            return;
+        }
+
+        var result = await AdminClient.ResolveClaimAsync(claim.Id, note, CancellationToken.None);
+        _errorMessage = result.ErrorMessage;
+        if (result.Succeeded)
+        {
+            _infoMessage = "Bildirim çözüldü olarak işaretlendi.";
+            await LoadAsync();
+        }
+    }
+
+    // StatusChip'te OPEN ilan durumu ("Yayında") ile çakışmasın diye açık bildirim ayrı anahtar.
+    private static string ChipStatus(string status) => status == ClaimStatuses.Open ? "claim_open" : status;
+}

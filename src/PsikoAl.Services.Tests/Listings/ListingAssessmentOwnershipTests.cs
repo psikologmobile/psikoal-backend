@@ -14,6 +14,7 @@ public sealed class ListingAssessmentOwnershipTests
     public async Task Someone_elses_result_is_rejected()
     {
         using var database = new TestDatabase();
+        await database.AddPricingPeriodAsync();
         var client = await database.AddProfileAsync();
         var other = await database.AddProfileAsync();
         var foreignResult = await database.AddAssessmentResultAsync(other.Id);
@@ -30,6 +31,7 @@ public sealed class ListingAssessmentOwnershipTests
     public async Task Anonymous_result_is_rejected()
     {
         using var database = new TestDatabase();
+        await database.AddPricingPeriodAsync();
         var client = await database.AddProfileAsync();
         var anonymousResult = await database.AddAssessmentResultAsync(userId: null);
 
@@ -43,6 +45,7 @@ public sealed class ListingAssessmentOwnershipTests
     public async Task Unknown_result_id_is_rejected()
     {
         using var database = new TestDatabase();
+        await database.AddPricingPeriodAsync();
         var client = await database.AddProfileAsync();
 
         var exception = await Assert.ThrowsAsync<DomainException>(
@@ -55,6 +58,7 @@ public sealed class ListingAssessmentOwnershipTests
     public async Task Own_result_is_attached()
     {
         using var database = new TestDatabase();
+        await database.AddPricingPeriodAsync();
         database.Context.SystemSettings.Add(new SystemSetting { Key = SystemSettingKeys.ListingAutoApprove, Value = "false" });
         var client = await database.AddProfileAsync();
         var ownResult = await database.AddAssessmentResultAsync(client.Id);
@@ -66,8 +70,8 @@ public sealed class ListingAssessmentOwnershipTests
     }
 
     private static ListingService CreateService(TestDatabase database)
-        => new(database.UnitOfWork, new AllCategoriesExistStub());
+        => new(database.UnitOfWork, new AllCategoriesExistStub(), Substitute.For<PsikoAl.Services.Abstractions.INotificationService>(), TimeProvider.System);
 
     private static CreateListingDto NewRequest(Guid assessmentResultId)
-        => new("Kaygı için destek", "Açıklama", ["Kaygı"], 500, 900, "online", City: null, assessmentResultId);
+        => new("Kaygı için destek", "Açıklama", ["Kaygı"], 500, 900, "online", City: null, assessmentResultId, ContactConsent: true, Phone: "05551112233");
 }

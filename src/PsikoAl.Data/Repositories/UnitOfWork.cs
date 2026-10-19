@@ -23,10 +23,11 @@ public sealed class UnitOfWork(AppDbContext dbContext) : IUnitOfWork
     private IAuditLogRepository? _auditLogs;
     private IBlogRepository? _blogs;
     private IBlogLikeRepository? _blogLikes;
-    private ICreditPackageRepository? _creditPackages;
-    private ICreditPaymentRepository? _creditPayments;
-    private ICreditTransactionRepository? _creditTransactions;
-    private IExpertCreditRepository? _expertCredits;
+    private IPricingPeriodRepository? _pricingPeriods;
+    private IWalletPaymentRepository? _walletPayments;
+    private IWalletTransactionRepository? _walletTransactions;
+    private IExpertWalletRepository? _expertWallets;
+    private IListingClaimRepository? _listingClaims;
 
     public IProfileRepository Profiles => _profiles ??= new ProfileRepository(dbContext);
 
@@ -70,14 +71,16 @@ public sealed class UnitOfWork(AppDbContext dbContext) : IUnitOfWork
 
     public IBlogLikeRepository BlogLikes => _blogLikes ??= new BlogLikeRepository(dbContext);
 
-    public ICreditPackageRepository CreditPackages => _creditPackages ??= new CreditPackageRepository(dbContext);
+    public IPricingPeriodRepository PricingPeriods => _pricingPeriods ??= new PricingPeriodRepository(dbContext);
 
-    public ICreditPaymentRepository CreditPayments => _creditPayments ??= new CreditPaymentRepository(dbContext);
+    public IWalletPaymentRepository WalletPayments => _walletPayments ??= new WalletPaymentRepository(dbContext);
 
-    public ICreditTransactionRepository CreditTransactions
-        => _creditTransactions ??= new CreditTransactionRepository(dbContext);
+    public IWalletTransactionRepository WalletTransactions
+        => _walletTransactions ??= new WalletTransactionRepository(dbContext);
 
-    public IExpertCreditRepository ExpertCredits => _expertCredits ??= new ExpertCreditRepository(dbContext);
+    public IExpertWalletRepository ExpertWallets => _expertWallets ??= new ExpertWalletRepository(dbContext);
+
+    public IListingClaimRepository ListingClaims => _listingClaims ??= new ListingClaimRepository(dbContext);
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken)
         => dbContext.SaveChangesAsync(cancellationToken);

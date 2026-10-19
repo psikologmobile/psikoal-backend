@@ -8,4 +8,7 @@ public sealed record AdminListingListItemDto(
     IReadOnlyList<string> Specialization,
     string BudgetLabel,
     string Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    decimal? QualityScore,
+    int OfferCount,
+    bool IsInvited);

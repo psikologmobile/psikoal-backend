@@ -10,8 +10,18 @@ namespace PsikoAl.Api.Controllers;
 [ApiController]
 [Route("admin/users")]
 [Authorize(Policy = AdminPolicies.Moderation)]
-public sealed class AdminUsersController(IAdminUserService adminUserService) : ControllerBase
+public sealed class AdminUsersController(
+    IAdminUserService adminUserService,
+    IAdminActivityService adminActivityService) : ControllerBase
 {
+    // REVIZE-2 §9: kişi bazlı işlem kaydı, en yeni önce. kind: ActivityKinds (virgülle birden çok).
+    [HttpGet("{id:guid}/activity")]
+    public Task<AdminPagedResultDto<AdminActivityItemDto>> Activity(
+        Guid id,
+        [FromQuery] AdminActivityQueryDto query,
+        CancellationToken cancellationToken)
+        => adminActivityService.ListAsync(id, query, cancellationToken);
+
     [HttpGet]
     public Task<AdminPagedResultDto<AdminUserListItemDto>> List(
         [FromQuery] AdminUserListQueryDto query,
