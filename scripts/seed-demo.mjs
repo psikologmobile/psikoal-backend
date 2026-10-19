@@ -642,7 +642,7 @@ async function main() {
       expected: ['OFFER_ALREADY_EXISTS', 'OFFER_LISTING_NOT_OPEN'],
       body: {
         listingId: listing.id,
-        expectedFeeKurus: quote.data.feeKurus,
+        expectedFeeKurus: quote.data.data.feeKurus,
         title: plan.title,
         price: plan.price,
         sessionType: plan.sessionType,
