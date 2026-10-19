@@ -61,6 +61,7 @@
                         <TableCell><StatusChip Status="@user.Status" /></TableCell>
                         <TableCell Class="text-muted-foreground">@user.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</TableCell>
                         <TableCell Class="cell-actions">
+                            <a class="link-button" data-testid="user-activity-link" href="@ActivityHref(user)">İşlem kaydı</a>
                             @if (user.Status == "active")
                             {
                                 <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm"
@@ -138,6 +139,9 @@
             _isLoading = false;
         }
     }
+
+    private static string ActivityHref(AdminUserListItemDto user)
+        => $"/activity?userId={user.Id}&name={Uri.EscapeDataString($"{user.FullName} · {user.Email}")}";
 
     private void AskFreeze(Guid userId)
     {

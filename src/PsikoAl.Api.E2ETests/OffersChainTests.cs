@@ -57,14 +57,14 @@ public sealed class OffersChainTests(E2EFixture fixture) : IAsyncLifetime
         _expertId = identity.Id;
         _expertToken = identity.Token;
 
-        // Profil her testte yeniden onaylı duruma çekiliyor ve bol kredi veriliyor
-        // (teklif kredi harcar; bakiye CreditsChainTests'in konusu, bu dosyanın değil): başka bir test
+        // Profil her testte yeniden onaylı duruma çekiliyor ve bol bakiye veriliyor
+        // (teklif ücret harcar; bakiye WalletChainTests'in konusu, bu dosyanın değil): başka bir test
         // (ya da önceki bir koşum) status'u bozmuş olabilir ve o zaman belirti
         // "teklif gönderilemedi" olur — sözleşme hatası değil, kurulum kaymasıdır.
         await ExecuteSqlAsync(
             """
             update public.experts
-               set status = 'approved', specializations = array[@spec], credit_balance = 1000
+               set status = 'approved', specializations = array[@spec], balance_kurus = 100000000, free_offer_rights = 0
              where id = @id;
             """,
             _expertId,
@@ -302,8 +302,13 @@ public sealed class OffersChainTests(E2EFixture fixture) : IAsyncLifetime
     // `Task` döndürmek YETMEZ: `using var request` metot dönerken dispose edilir ve
     // TestHost gövdeyi okumaya çalıştığında ObjectDisposedException atar. Bu yüzden
     // istek burada await ediliyor.
+    //
+    // Revize 2: teklif, uzmanın onayladığı anlık ücreti (expectedFeeKurus) taşır; önce
+    // /offers/quote okunur. Quote hata dönerse (ilan açık değil, uzman onaysız) ücret 0
+    // gönderilir — o durumda kural ihlali ücret kontrolünden ÖNCE yakalanır.
     private async Task<HttpResponseMessage> CreateOfferAsync(Guid listingId, decimal price, string? title)
     {
+        var expectedFeeKurus = await QuoteFeeAsync(listingId);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/offers")
         {
             Content = JsonContent.Create(new
@@ -313,11 +318,22 @@ public sealed class OffersChainTests(E2EFixture fixture) : IAsyncLifetime
                 price,
                 sessionType = "online",
                 description = (string?)null,
+                expectedFeeKurus,
             }),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _expertToken);
 
         return await fixture.Mobile.SendAsync(request);
+    }
+
+    private async Task<long> QuoteFeeAsync(Guid listingId)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/offers/quote?listingId={listingId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _expertToken);
+        var response = await fixture.Mobile.SendAsync(request);
+        return response.IsSuccessStatusCode
+            ? (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data").GetProperty("feeKurus").GetInt64()
+            : 0;
     }
 
     private async Task<List<JsonElement>> ListOffersAsync(Guid listingId)
@@ -344,6 +360,8 @@ public sealed class OffersChainTests(E2EFixture fixture) : IAsyncLifetime
                 budgetMin = 750m,
                 budgetMax = 1500m,
                 preferredSessionType = "online",
+                contactConsent = true,
+                phone = "05551112233",
                 city = "İstanbul",
                 assessmentResultId = (Guid?)null,
             });

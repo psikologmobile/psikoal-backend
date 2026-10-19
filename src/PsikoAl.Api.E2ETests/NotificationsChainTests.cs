@@ -41,6 +41,10 @@ public sealed class NotificationsChainTests(E2EFixture fixture) : IAsyncLifetime
         "OFFER_RECEIVED", "OFFER_ACCEPTED", "LISTING_EXPIRING", "LISTING_APPROVED",
         "LISTING_REJECTED", "EXPERT_APPROVED", "EXPERT_REJECTED", "REVIEW_APPROVED",
         "REVIEW_REJECTED", "SYSTEM",
+
+        // REVIZE-2 §8: mobil enum bu türlerle genişletilmeli.
+        "MATCHED", "LISTING_MATCHED_OTHER", "CLAIM_REMINDER", "INVITED_CLIENT_LISTING", "BALANCE_TOPUP",
+        "ADMIN_GIFT", "WELCOME_RIGHTS", "REFERRAL_REWARD", "INVOICE_READY",
     ];
 
     /// <summary>Bu testin ürettiği bildirim gövdeleri — DisposeAsync bunları siler.</summary>

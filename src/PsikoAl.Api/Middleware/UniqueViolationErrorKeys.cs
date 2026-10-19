@@ -14,6 +14,7 @@ public static class UniqueViolationErrorKeys
         ["experts_pkey"] = ErrorKeys.ExpertProfileAlreadyExists,
         ["categories_slug_key"] = ErrorKeys.CategorySlugAlreadyExists,
         ["blogs_slug_key"] = ErrorKeys.BlogSlugAlreadyExists,
+        ["uq_listing_claims_listing_expert"] = ErrorKeys.ClaimAlreadyExists,
     };
 
     public static string For(string? constraintName)

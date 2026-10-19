@@ -9,9 +9,9 @@
 //
 // Zincir:
 //   admin kategori ekler → uzman kaydolur + profil açar → admin onaylar/doğrular
-//   → admin uzmanlara kredi yükler (teklif kredi harcar)
-//   → danışan ilan açar → admin onaylar → uzman teklif verir → danışan kabul eder
-//   → iki taraf da bırakır → danışan yorum yazar → admin yorumu onaylar
+//   → admin uzmanlara TL bakiye hediye eder (teklif ücretlidir)
+//   → danışan ilan açar → admin onaylar → uzman ücreti sorar + teklif verir
+//   → danışan "eşleşti" işaretler → danışan yorum yazar → admin yorumu onaylar
 //   → admin bildirim gönderir → admin blog yazılarını yayınlar/planlar
 
 import { deflateSync } from 'node:zlib'
@@ -20,9 +20,9 @@ const API = process.env.E2E_API_URL ?? 'http://localhost:5089'
 
 const ADMIN = { email: 'e2e-admin@psikoal.test', password: 'E2eAdminPass123!' }
 
-// Teklif başına OFFER_CREDIT_COST (varsayılan 1) kredi düşer; 20 kredi demo
+// Teklif ücreti dönemin tavanını (başlangıç dönemi 1000 TL) aşmaz; 5000 TL demo
 // zincirindeki teklifler ve elle denemeler için fazlasıyla yeter.
-const DEMO_EXPERT_CREDITS = 20
+const DEMO_EXPERT_BALANCE_KURUS = 500_000
 
 // DEMO danışanı, E2E danışanından AYRI olmak zorunda.
 // e2e-client@psikoal.test hesabı .NET E2E testlerinin paylaşılan fixture'ıdır ve
@@ -543,22 +543,22 @@ async function main() {
     experts.push({ ...expert, token, id: expertId })
   }
 
-  // --- 4b. Uzman kredisi ---------------------------------------------------
-  // Teklif göndermek kredi harcar ve yeni uzmana başlangıç kredisi YOK. Demo
-  // uzmanları, finans panelinin elle düzeltme ucundan DEMO_EXPERT_CREDITS'e
+  // --- 4b. Uzman bakiyesi --------------------------------------------------
+  // Teklif göndermek TL ücreti (ya da ücretsiz hak) harcar. Demo uzmanları,
+  // admin cüzdan panelinin hediye ucundan DEMO_EXPERT_BALANCE_KURUS'a
   // tamamlanır (yalnız eksik kadar; script tekrar koşunca bakiye şişmez).
-  section('4b. Admin demo uzmanlarına kredi yükler')
+  section('4b. Admin demo uzmanlarına bakiye hediye eder')
   for (const expert of experts) {
-    const credits = await call('GET', `/admin/credits/experts/${expert.id}`, {
+    const wallet = await call('GET', `/admin/wallet/experts/${expert.id}`, {
       token: adminToken,
       label: `${expert.firstName} bakiye`,
     })
-    const missing = DEMO_EXPERT_CREDITS - (credits.data?.balance ?? 0)
-    if (!credits.ok || missing <= 0) continue
-    await call('POST', `/admin/credits/experts/${expert.id}/adjust`, {
+    const missing = DEMO_EXPERT_BALANCE_KURUS - (wallet.data?.balanceKurus ?? 0)
+    if (!wallet.ok || missing <= 0) continue
+    await call('POST', `/admin/wallet/experts/${expert.id}/gift`, {
       token: adminToken,
-      label: `${expert.firstName} +${missing} kredi`,
-      body: { amount: missing, reason: 'Demo verisi: başlangıç kredisi' },
+      label: `${expert.firstName} +${missing / 100} TL`,
+      body: { amountKurus: missing, freeRights: 0, reason: 'Demo verisi: başlangıç bakiyesi' },
     })
   }
 
@@ -596,6 +596,7 @@ async function main() {
         budgetMax: listing.budgetMax,
         preferredSessionType: listing.preferredSessionType,
         city: listing.city,
+        contactConsent: true,
         assessmentResultId: null,
       },
     })
@@ -627,12 +628,21 @@ async function main() {
     const listing = openListings[plan.listing]
     if (!expert || !listing) continue
 
+    // Ücret ilanın kalitesine, yaşına ve teklif sayısına göre değişir; gönderim
+    // anlık ücreti expectedFeeKurus ile onaylamak zorunda (aksi 409 OFFER_FEE_CHANGED).
+    const quote = await call('GET', `/offers/quote?listingId=${listing.id}`, {
+      token: expert.token,
+      label: `${expert.firstName} ücret`,
+    })
+    if (!quote.ok) continue
+
     const offer = await call('POST', '/offers', {
       token: expert.token,
       label: `${expert.firstName} → ${listing.title.slice(0, 30)}`,
       expected: ['OFFER_ALREADY_EXISTS', 'OFFER_LISTING_NOT_OPEN'],
       body: {
         listingId: listing.id,
+        expectedFeeKurus: quote.data.data.feeKurus,
         title: plan.title,
         price: plan.price,
         sessionType: plan.sessionType,
@@ -642,8 +652,8 @@ async function main() {
     if (offer.ok) offers.push({ ...plan, id: offer.data.id, expert, listing })
   }
 
-  // --- 7. Kabul → eşleşme --------------------------------------------------
-  section('7. Danışan teklifi kabul eder → eşleşme')
+  // --- 7. Eşleşti işaretleme ----------------------------------------------
+  section('7. Danışan bir teklif sahibiyle "eşleşti" işaretler')
   // Önceki koşum zinciri tamamladıysa yeni eşleşme kurulmaz; mevcut olan bulunur.
   const priorMatches = await call('GET', '/matches', { token: clientToken, label: 'mevcut eşleşmeler' })
   const priorRows = priorMatches.data?.data ?? priorMatches.data ?? []
@@ -654,37 +664,26 @@ async function main() {
   if (alreadyMatched) {
     console.log(`  · --- eşleşme zaten var: ${matchId} (${priorRows[0].status})`)
   } else if (!accepted) {
-    console.log('  ✗ kabul edilecek teklif bulunamadı')
+    console.log('  ✗ eşleşilecek teklif bulunamadı')
     failed += 1
   } else {
-    const accept = await call('POST', `/offers/${accepted.id}/accept`, {
+    const match = await call('POST', `/listings/${accepted.listing.id}/match`, {
       token: clientToken,
-      label: `${accepted.expert.firstName} kabul edildi`,
+      label: `${accepted.expert.firstName} ile eşleşti`,
+      body: { offerId: accepted.id },
     })
-    if (accept.ok) matchId = accept.data.matchId ?? accept.data.id ?? null
+    if (match.ok) matchId = match.data.data?.matchId ?? null
   }
 
-  // --- 8. Karşılıklı bırakma → yorum → moderasyon --------------------------
-  section('8. Eşleşmeyi bırakma → yorum → admin onayı')
+  // --- 8. Yorum → moderasyon -----------------------------------------------
+  // Eşleşme sonlandırılmaz; değerlendirme eşleşir eşleşmez açıktır.
+  section('8. Danışan yorum yazar → admin onayı')
   if (!matchId) {
     console.log('  ✗ eşleşme yok, yorum zinciri atlandı')
     failed += 1
   } else {
-    const releaseExpert = experts.find((e) => e.id === accepted?.expert.id) ?? experts[0]
-    await call('POST', `/match/${matchId}/release`, {
-      token: clientToken,
-      label: 'danışan bıraktı',
-      expected: ['MATCH_NOT_ACTIVE'],
-      body: { matchId, reason: 'Süreci tamamladık.' },
-    })
-    await call('POST', `/match/${matchId}/release`, {
-      token: releaseExpert.token,
-      label: 'uzman bıraktı',
-      expected: ['MATCH_NOT_ACTIVE'],
-      body: { matchId, reason: 'Hedeflere ulaşıldı.' },
-    })
-
-    const review = await call('POST', `/experts/${releaseExpert.id}/reviews`, {
+    const reviewedExpert = experts.find((e) => e.id === accepted?.expert.id) ?? experts[0]
+    const review = await call('POST', `/experts/${reviewedExpert.id}/reviews`, {
       token: clientToken,
       label: '5 yıldız',
       expected: ['REVIEW_ALREADY_EXISTS'],

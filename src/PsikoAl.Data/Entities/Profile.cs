@@ -36,6 +36,8 @@ public sealed class Profile
 
     public string? ConsentVersion { get; set; }
 
+    public Guid? ReferredByExpertId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

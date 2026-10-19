@@ -1,5 +1,9 @@
 namespace PsikoAl.Common.Dtos.Listing;
 
+// Görünüme göre dolan alanlar (REVIZE-2 §3.3):
+//   uzman   — OfferFeeKurus/Label, InvitedByViewer, ViewerClaim, ClientContact, MatchedWithOther
+//   danışan — MatchedExpert, Claims, ContactConsentAt
+// Diğer görünümde null/false döner; alanlar her zaman vardır (mobil şema sabit kalsın).
 public sealed record ListingDto(
     Guid Id,
     Guid ClientId,
@@ -21,4 +25,13 @@ public sealed record ListingDto(
     bool ViewerHasOffered,
     Guid? ViewerOfferId,
     string? RejectionReason,
-    ListingAssessmentResultDto? AssessmentResult);
+    ListingAssessmentResultDto? AssessmentResult,
+    long? OfferFeeKurus,
+    string? OfferFeeLabel,
+    bool InvitedByViewer,
+    ListingViewerClaimDto? ViewerClaim,
+    ListingClientContactDto? ClientContact,
+    bool MatchedWithOther,
+    ListingMatchedExpertDto? MatchedExpert,
+    IReadOnlyList<ListingClaimDto>? Claims,
+    DateTimeOffset? ContactConsentAt);

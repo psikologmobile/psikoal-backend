@@ -56,14 +56,14 @@ public sealed class ExpertService(IUnitOfWork unitOfWork, ICategoryService categ
 
         await unitOfWork.Experts.AddAsync(expert, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return ExpertMapper.ToExpertDto(expert, profile, rating: 0, reviewCount: 0);
+        return ExpertMapper.ToExpertDto(expert, profile, rating: 0, reviewCount: 0, isOwnProfile: true);
     }
 
-    private async Task<ExpertDto> ToExpertDtoWithRatingAsync(Expert expert, Profile profile, CancellationToken cancellationToken)
+    private async Task<ExpertDto> ToExpertDtoWithRatingAsync(Expert expert, Profile profile, bool isOwnProfile, CancellationToken cancellationToken)
     {
         var rating = await unitOfWork.Reviews.GetRatingAsync(expert.Id, cancellationToken);
         var reviewCount = await unitOfWork.Reviews.GetReviewCountAsync(expert.Id, cancellationToken);
-        return ExpertMapper.ToExpertDto(expert, profile, rating, reviewCount);
+        return ExpertMapper.ToExpertDto(expert, profile, rating, reviewCount, isOwnProfile);
     }
 
     public async Task<ExpertDto> UpdateProfileAsync(
@@ -95,7 +95,7 @@ public sealed class ExpertService(IUnitOfWork unitOfWork, ICategoryService categ
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        return await ToExpertDtoWithRatingAsync(expert, profile, cancellationToken);
+        return await ToExpertDtoWithRatingAsync(expert, profile, isOwnProfile: true, cancellationToken);
     }
 
     public async Task<ExpertDto> GetByIdAsync(Guid expertId, Guid? viewerUserId, CancellationToken cancellationToken)
@@ -109,7 +109,8 @@ public sealed class ExpertService(IUnitOfWork unitOfWork, ICategoryService categ
             throw new DomainException(ErrorKeys.ExpertNotFound);
         }
 
-        return await ToExpertDtoWithRatingAsync(expert, profile, cancellationToken);
+        await ExpertVisibility.EnsureVisibleAsync(unitOfWork, expertId, viewerUserId, cancellationToken);
+        return await ToExpertDtoWithRatingAsync(expert, profile, isOwnProfile: viewerUserId == expertId, cancellationToken);
     }
 
     internal static void ApplyUpdate(Expert expert, UpdateExpertProfileDto request)

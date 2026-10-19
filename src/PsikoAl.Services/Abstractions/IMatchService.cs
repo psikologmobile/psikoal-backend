@@ -9,6 +9,4 @@ public interface IMatchService
     Task<MatchDto?> GetActiveAsync(Guid userId, CancellationToken cancellationToken);
 
     Task<MatchDto> GetByIdAsync(Guid matchId, Guid viewerUserId, CancellationToken cancellationToken);
-
-    Task<MatchDto> ReleaseAsync(Guid actorUserId, Guid matchId, string? reason, CancellationToken cancellationToken);
 }

@@ -36,6 +36,21 @@ public sealed class Listing
 
     public DateTimeOffset? ExpiresAt { get; set; }
 
+    public DateTimeOffset? ContactConsentAt { get; set; }
+
+    // Onay anının ücret eğrisi (REVIZE-2 §1.1); onaylanmamış ilanda null.
+    public decimal? QualityScore { get; set; }
+
+    public long? FeeInitialKurus { get; set; }
+
+    public long? FeeMinKurus { get; set; }
+
+    public decimal? DailyDecayPct { get; set; }
+
+    public decimal? PerOfferDecayPct { get; set; }
+
+    public Guid? InvitedExpertId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

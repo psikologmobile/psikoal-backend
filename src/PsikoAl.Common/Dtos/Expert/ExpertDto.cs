@@ -18,4 +18,5 @@ public sealed record ExpertDto(
     string? Education,
     string? CvUrl,
     IReadOnlyList<string> Certificates,
-    string? PersonalWebsite);
+    string? PersonalWebsite,
+    string? RejectionReason);

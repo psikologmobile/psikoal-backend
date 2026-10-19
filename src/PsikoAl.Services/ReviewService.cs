@@ -39,11 +39,8 @@ public sealed class ReviewService(IUnitOfWork unitOfWork) : IReviewService
             throw new DomainException(ErrorKeys.MatchNotParticipant);
         }
 
-        if (match.Status is not (MatchStatuses.Completed or MatchStatuses.Released))
-        {
-            throw new DomainException(ErrorKeys.MatchNotActive);
-        }
-
+        // REVIZE-2 §5: değerlendirme eşleşir eşleşmez (ACTIVE) açık; eşleşme sonradan admin
+        // tarafından sonlandırılsa da hak düşmez. Eşleşme başına tek değerlendirme kuralı aşağıda.
         if (await unitOfWork.Reviews.ExistsForMatchAsync(clientUserId, request.MatchId, cancellationToken))
         {
             throw new DomainException(ErrorKeys.ReviewAlreadyExists);
@@ -64,8 +61,13 @@ public sealed class ReviewService(IUnitOfWork unitOfWork) : IReviewService
         return ReviewMapper.ToReviewDto(review);
     }
 
-    public async Task<IReadOnlyList<ReviewDto>> ListApprovedForExpertAsync(Guid expertId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ReviewDto>> ListApprovedForExpertAsync(
+        Guid expertId,
+        Guid? viewerUserId,
+        CancellationToken cancellationToken)
     {
+        await ExpertVisibility.EnsureVisibleAsync(unitOfWork, expertId, viewerUserId, cancellationToken);
+
         var reviews = await unitOfWork.Reviews.Query()
             .Where(review => review.ExpertId == expertId && review.Status == ReviewStatuses.Approved)
             .OrderByDescending(review => review.CreatedAt)

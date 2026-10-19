@@ -1,0 +1,291 @@
+@page "/payments"
+@inject IAdminClientService AdminClient
+@inject AdminFileInterop Files
+
+<PageTitle>Ödemeler ve Faturalar — PsikoAl Admin</PageTitle>
+
+<PageHeader Title="Ödemeler ve Faturalar"
+            Description="Uzmanların PayTR ile yaptığı bakiye yüklemeleri. Bakiyeyi yalnız PayTR'nin doğrulanmış bildirimi yükler; bekleyen kayıt ödeme sayfasının kapatıldığı anlamına da gelebilir. Ödenen her yükleme için fatura (PDF) yüklenir; uzman Faturalarım ekranından indirir." />
+
+<div class="toolbar">
+    <Select Class="toolbar-select" data-testid="payments-status" @bind-Value="_status">
+        <option value="">Tüm durumlar</option>
+        <option value="@WalletPaymentStatuses.Paid">Ödendi</option>
+        <option value="@WalletPaymentStatuses.Pending">Beklemede</option>
+        <option value="@WalletPaymentStatuses.Failed">Başarısız</option>
+    </Select>
+    <Select Class="toolbar-select" data-testid="payments-invoice" @bind-Value="_invoice">
+        <option value="">Fatura: tümü</option>
+        <option value="missing">Fatura yok</option>
+        <option value="present">Fatura var</option>
+    </Select>
+    <Button Disabled="_isLoading" data-testid="payments-filter" OnClick="FilterAsync">Filtrele</Button>
+</div>
+
+@if (_errorMessage is not null)
+{
+    <Alert Variant="AlertVariant.Destructive" Class="mb-4">
+        <AlertDescription>@_errorMessage</AlertDescription>
+    </Alert>
+}
+
+@if (_infoMessage is not null)
+{
+    <Alert Class="mb-4">
+        <AlertDescription>@_infoMessage</AlertDescription>
+    </Alert>
+}
+
+<Card Class="table-card" data-testid="payments-table">
+    @if (_isLoading)
+    {
+        <LoadingSkeleton />
+    }
+    else if (_payments is { Count: 0 })
+    {
+        <EmptyState Title="Ödeme yok" Description="Seçtiğiniz süzgeçlere uyan bakiye yüklemesi bulunmuyor." />
+    }
+    else if (_payments is not null)
+    {
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Oluşturma</TableHead>
+                    <TableHead>Uzman</TableHead>
+                    <TableHead Class="text-right">Tutar</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead>Tamamlanma</TableHead>
+                    <TableHead>Fatura</TableHead>
+                    <TableHead Class="text-right">İşlem</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                @foreach (var payment in _payments)
+                {
+                    <TableRow>
+                        <TableCell Class="text-muted-foreground">
+                            @AdminFormat.DateTime(payment.CreatedAt)
+                            <div class="muted font-mono">@payment.MerchantOid</div>
+                        </TableCell>
+                        <TableCell>
+                            @payment.ExpertName
+                            <div class="muted">@payment.ExpertEmail</div>
+                        </TableCell>
+                        <TableCell Class="text-right font-medium">@payment.AmountLabel</TableCell>
+                        <TableCell><StatusChip Status="@payment.Status" Label="@payment.StatusLabel" /></TableCell>
+                        <TableCell Class="text-muted-foreground">@AdminFormat.DateTime(payment.CompletedAt)</TableCell>
+                        <TableCell>
+                            @if (payment.Invoice is { } invoice)
+                            {
+                                <span>@invoice.FileName</span>
+                                <div class="muted">@AdminFormat.DateTime(invoice.UploadedAt)@(invoice.UploadedByName is null ? "" : $" · {invoice.UploadedByName}")</div>
+                            }
+                            else if (payment.Status == WalletPaymentStatuses.Paid)
+                            {
+                                <StatusChip Status="pending" Label="Fatura bekliyor" />
+                            }
+                            else
+                            {
+                                <span class="muted">—</span>
+                            }
+                        </TableCell>
+                        <TableCell Class="cell-actions">
+                            @if (payment.Invoice is not null)
+                            {
+                                <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" data-testid="payment-invoice-open"
+                                        Disabled="_isBusy" OnClick="() => OpenInvoiceAsync(payment.Id)">
+                                    Faturayı aç
+                                </Button>
+                            }
+                            <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="() => ToggleDetail(payment.Id)">
+                                @(_openPaymentId == payment.Id ? "Kapat" : payment.Status == WalletPaymentStatuses.Paid ? (payment.Invoice is null ? "Fatura yükle" : "Fatura / cüzdan") : "Uzman cüzdanı")
+                            </Button>
+                        </TableCell>
+                    </TableRow>
+
+                    @if (_invoiceLinks.TryGetValue(payment.Id, out var invoiceUrl))
+                    {
+                        <TableRow>
+                            <TableCell Class="detail-cell" colspan="7">
+                                <div class="detail-actions">
+                                    <span class="muted">Tarayıcı yeni sekmeyi engelledi. Bağlantı 5 dakika geçerli:</span>
+                                    <a class="link-button" href="@invoiceUrl" target="_blank" rel="noopener noreferrer">Faturayı aç</a>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    }
+
+                    @if (_openPaymentId == payment.Id)
+                    {
+                        <TableRow>
+                            <TableCell Class="detail-cell" colspan="7">
+                                <div class="detail-panel">
+                                    @if (payment.Status == WalletPaymentStatuses.Paid)
+                                    {
+                                        <section class="stack-3">
+                                            <h3 class="detail-heading">@(payment.Invoice is null ? "Fatura yükle" : "Faturayı değiştir")</h3>
+                                            <p class="help-text">
+                                                Yalnız PDF, en fazla 10 MB. Yükleme uzmana "Faturanız hazır" bildirimi gönderir;
+                                                tekrar yükleme öncekinin yerine geçer.
+                                            </p>
+                                            <InputFile data-testid="payment-invoice-input" accept="application/pdf,.pdf"
+                                                       disabled="@_isBusy" OnChange="args => UploadInvoiceAsync(payment.Id, args)" />
+                                        </section>
+                                        <Separator />
+                                    }
+                                    <h3 class="detail-heading">Uzman cüzdanı</h3>
+                                    <ExpertWalletPanel ExpertId="payment.ExpertId" />
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    }
+                }
+            </TableBody>
+        </Table>
+        <Pager Meta="_meta" Disabled="_isLoading" OnPageChanged="GoToPageAsync" />
+    }
+</Card>
+
+@code {
+    private const int PerPage = 25;
+    private static readonly byte[] PdfSignature = System.Text.Encoding.ASCII.GetBytes("%PDF-");
+
+    private IReadOnlyList<AdminWalletPaymentDto>? _payments;
+    private AdminPageMetaDto? _meta;
+    private int _page = 1;
+    private string _status = WalletPaymentStatuses.Paid;
+    private string _invoice = string.Empty;
+    private Guid? _openPaymentId;
+    private readonly Dictionary<Guid, string> _invoiceLinks = [];
+    private bool _isLoading = true;
+    private bool _isBusy;
+    private string? _errorMessage;
+    private string? _infoMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task FilterAsync()
+    {
+        _page = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _page = page;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _openPaymentId = null;
+        _invoiceLinks.Clear();
+        try
+        {
+            bool? hasInvoice = _invoice switch
+            {
+                "present" => true,
+                "missing" => false,
+                _ => null,
+            };
+            var result = await AdminClient.ListWalletPaymentsAsync(
+                new AdminWalletPaymentQueryDto(string.IsNullOrEmpty(_status) ? null : _status, hasInvoice, _page, PerPage),
+                CancellationToken.None);
+            _payments = result.Value?.Data;
+            _meta = result.Value?.Meta;
+            _errorMessage = result.ErrorMessage;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ToggleDetail(Guid paymentId)
+    {
+        _openPaymentId = _openPaymentId == paymentId ? null : paymentId;
+        _infoMessage = null;
+    }
+
+    private async Task OpenInvoiceAsync(Guid paymentId)
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        try
+        {
+            var result = await AdminClient.GetInvoiceUrlAsync(paymentId, CancellationToken.None);
+            if (result.Value is not { } url)
+            {
+                _errorMessage = result.ErrorMessage;
+                return;
+            }
+
+            // İmzalı adres 5 dk geçerli; açılır pencere engellenirse satırın altında bağlantı gösterilir.
+            if (await Files.OpenInNewTabAsync(url))
+            {
+                _invoiceLinks.Remove(paymentId);
+            }
+            else
+            {
+                _invoiceLinks[paymentId] = url;
+            }
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task UploadInvoiceAsync(Guid paymentId, InputFileChangeEventArgs args)
+    {
+        _errorMessage = _infoMessage = null;
+        var file = args.File;
+        if (!file.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrEmpty(file.ContentType) && file.ContentType != "application/pdf"))
+        {
+            _errorMessage = "Fatura yalnız PDF olabilir.";
+            return;
+        }
+
+        if (file.Size > WalletFieldLimits.InvoiceMaxBytes)
+        {
+            _errorMessage = "Fatura en fazla 10 MB olabilir.";
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            using var buffered = new MemoryStream();
+            await using (var source = file.OpenReadStream(WalletFieldLimits.InvoiceMaxBytes))
+            {
+                await source.CopyToAsync(buffered);
+            }
+
+            var bytes = buffered.ToArray();
+
+            // Sunucu da imzayı doğrular; burada erken uyarı: uzantısı .pdf olan başka dosya.
+            if (bytes.Length < PdfSignature.Length || !bytes.AsSpan(0, PdfSignature.Length).SequenceEqual(PdfSignature))
+            {
+                _errorMessage = "Dosya geçerli bir PDF değil.";
+                return;
+            }
+
+            var result = await AdminClient.UploadInvoiceAsync(paymentId, bytes, file.Name, CancellationToken.None);
+            if (result.Value is not { } updated)
+            {
+                _errorMessage = result.ErrorMessage;
+                return;
+            }
+
+            _payments = _payments?.Select(payment => payment.Id == updated.Id ? updated : payment).ToList();
+            _infoMessage = $"{updated.ExpertName} için fatura yüklendi; uzmana bildirim gönderildi.";
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+}

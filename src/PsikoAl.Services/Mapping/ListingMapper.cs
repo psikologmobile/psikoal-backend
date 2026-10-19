@@ -4,6 +4,20 @@ using PsikoAl.Data.Entities;
 
 namespace PsikoAl.Services.Mapping;
 
+/// <summary>Görünüme özgü alanlar (REVIZE-2 §3.3).</summary>
+/// <remarks>Uzman görünümü ücret/davet/iletişim, danışan görünümü eşleşme/anlaşma bildirimleri taşır.</remarks>
+public sealed record ListingViewExtras(
+    long? OfferFeeKurus = null,
+    bool InvitedByViewer = false,
+    ListingViewerClaimDto? ViewerClaim = null,
+    ListingClientContactDto? ClientContact = null,
+    bool MatchedWithOther = false,
+    ListingMatchedExpertDto? MatchedExpert = null,
+    IReadOnlyList<ListingClaimDto>? Claims = null)
+{
+    public static readonly ListingViewExtras None = new();
+}
+
 public static class ListingMapper
 {
     public static ListingDto ToListingDto(
@@ -12,8 +26,11 @@ public static class ListingMapper
         bool viewerIsOwner,
         bool viewerHasOffered,
         Guid? viewerOfferId,
-        AssessmentResult? assessmentResult = null)
-        => new(
+        AssessmentResult? assessmentResult = null,
+        ListingViewExtras? extras = null)
+    {
+        var view = extras ?? ListingViewExtras.None;
+        return new ListingDto(
             listing.Id,
             listing.ClientId,
             new ListingClientDto(
@@ -47,5 +64,15 @@ public static class ListingMapper
                     assessmentResult.Score,
                     assessmentResult.Level,
                     assessmentResult.Summary,
-                    assessmentResult.Assessment?.Title ?? string.Empty));
+                    assessmentResult.Assessment?.Title ?? string.Empty),
+            view.OfferFeeKurus,
+            view.OfferFeeKurus is { } fee ? MoneyLabel.Try(fee) : null,
+            view.InvitedByViewer,
+            view.ViewerClaim,
+            viewerHasOffered ? view.ClientContact : null,
+            view.MatchedWithOther,
+            viewerIsOwner ? view.MatchedExpert : null,
+            viewerIsOwner ? view.Claims ?? [] : null,
+            viewerIsOwner ? listing.ContactConsentAt : null);
+    }
 }

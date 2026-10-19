@@ -35,8 +35,4 @@ public sealed class MatchesController(IMatchService matchService) : ControllerBa
     [HttpGet("/matches/{id:guid}")]
     public Task<MatchDto> GetById(Guid id, CancellationToken cancellationToken)
         => matchService.GetByIdAsync(id, this.CurrentUserId(), cancellationToken);
-
-    [HttpPost("/match/{id:guid}/release")]
-    public Task<MatchDto> Release(Guid id, [FromBody] ReleaseMatchDto body, CancellationToken cancellationToken)
-        => matchService.ReleaseAsync(this.CurrentUserId(), id, body.Reason, cancellationToken);
 }

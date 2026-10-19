@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -105,7 +106,9 @@ public sealed class SupabaseStorageService(HttpClient httpClient, IOptions<Supab
         };
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+
+        // Silinmek istenen obje zaten yoksa hedeflenen son durum sağlanmış demektir.
+        if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NotFound)
         {
             throw new DomainException(ErrorKeys.StorageUploadFailed);
         }

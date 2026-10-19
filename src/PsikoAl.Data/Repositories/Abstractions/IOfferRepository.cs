@@ -11,4 +11,7 @@ public interface IOfferRepository : IRepository<Offer, Guid>
     Task<bool> ExistsForListingAndExpertAsync(Guid listingId, Guid expertId, CancellationToken cancellationToken);
 
     Task IncrementListingOfferCountAsync(Guid listingId, CancellationToken cancellationToken);
+
+    // İlan kapanınca bekleyen teklifler REJECTED + closed_reason; etkilenen uzmanlar döner.
+    Task<IReadOnlyList<Guid>> RejectPendingForListingAsync(Guid listingId, string closedReason, CancellationToken cancellationToken);
 }

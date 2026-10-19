@@ -37,6 +37,30 @@ public sealed class SupabaseStorageFolderDeletionTests
         Assert.Empty(handler.DeleteBodies);
     }
 
+    // Sertifika silme: obje zaten yoksa (404) hedef durum sağlanmıştır, hata sayılmaz.
+    [Fact]
+    public async Task DeleteObjectAsync_treats_missing_object_as_done()
+    {
+        var service = new SupabaseStorageService(new HttpClient(new StatusHandler(HttpStatusCode.NotFound)) { BaseAddress = new Uri("http://127.0.0.1:54321/") });
+
+        await service.DeleteObjectAsync("documents", "u1/certificates/a.pdf", CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DeleteObjectAsync_still_fails_on_server_errors()
+    {
+        var service = new SupabaseStorageService(new HttpClient(new StatusHandler(HttpStatusCode.InternalServerError)) { BaseAddress = new Uri("http://127.0.0.1:54321/") });
+
+        await Assert.ThrowsAsync<PsikoAl.Common.Exceptions.DomainException>(
+            () => service.DeleteObjectAsync("documents", "u1/certificates/a.pdf", CancellationToken.None));
+    }
+
+    private sealed class StatusHandler(HttpStatusCode status) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent("{}") });
+    }
+
     private sealed class RoutingHandler(Dictionary<string, string> listings) : HttpMessageHandler
     {
         public List<string> DeleteBodies { get; } = [];

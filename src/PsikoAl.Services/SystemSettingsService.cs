@@ -6,6 +6,7 @@ using PsikoAl.Common.Exceptions;
 using PsikoAl.Data.Entities;
 using PsikoAl.Data.Repositories.Abstractions;
 using PsikoAl.Services.Abstractions;
+using PsikoAl.Services.Wallet;
 
 namespace PsikoAl.Services;
 
@@ -55,11 +56,25 @@ public sealed class SystemSettingsService(
         return new SystemSettingDto(setting.Key, setting.Value, setting.Description, setting.UpdatedAt);
     }
 
-    // Teklif maliyeti tam sayı ve 0..1000 aralığında olmalı; bozuk bir değer teklif akışında
-    // sessizce varsayılana düşerdi ve panelde girilenle uygulanan farklı olurdu.
-    private static void EnsureValidValue(string key, string value)
+    // Revize 2 ayarları tipli doğrulanır: bozuk bir değer akışta sessizce varsayılana
+    // düşerdi (SettingValues) ve panelde girilenle uygulanan farklı olurdu.
+    internal static void EnsureValidValue(string key, string value)
     {
-        if (key == SystemSettingKeys.OfferCreditCost && !OfferCreditCost.TryParse(value, out _))
+        var valid = key switch
+        {
+            SystemSettingKeys.TopupPresetsTry => SettingValues.TryParsePresets(value, out _),
+            SystemSettingKeys.TopupMinTry or SystemSettingKeys.TopupMaxTry
+                => SettingValues.TryParseNonNegativeLong(value, out var amount) && amount is > 0 and <= 1_000_000,
+            SystemSettingKeys.WelcomeFreeRights or SystemSettingKeys.ReferralFreeRights
+                => SettingValues.TryParseNonNegativeLong(value, out var rights) && rights <= WalletFieldLimits.AdminMaxFreeRights,
+            SystemSettingKeys.ClaimAdminReviewDays
+                => SettingValues.TryParseNonNegativeLong(value, out var days) && days <= 365,
+            SystemSettingKeys.ClaimsEnabled => bool.TryParse(value, out _),
+            SystemSettingKeys.VatNote => !string.IsNullOrWhiteSpace(value) && value.Length <= 100,
+            _ => true,
+        };
+
+        if (!valid)
         {
             throw new DomainException(ErrorKeys.ValidationFailed, "value");
         }

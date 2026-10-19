@@ -22,6 +22,7 @@ var apiBaseAddress = ResolveApiBaseAddress(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AdminSessionState>();
 builder.Services.AddScoped<AdminSessionStore>();
+builder.Services.AddScoped<AdminFileInterop>();
 builder.Services.AddHttpClient<IAdminAuthService, AdminAuthService>(client => client.BaseAddress = apiBaseAddress);
 builder.Services.AddHttpClient<IAdminClientService, AdminClientService>(client => client.BaseAddress = apiBaseAddress);
 

@@ -1,0 +1,680 @@
+@page "/pricing"
+@using System.Globalization
+@inject IAdminClientService AdminClient
+@inject TimeProvider Clock
+
+<PageTitle>Fiyatlandırma — PsikoAl Admin</PageTitle>
+
+<PageHeader Title="Fiyatlandırma Dönemleri"
+            Description="Danışan bütçe aralığı ve uzmanın teklif ücreti dönemlere bağlıdır. Dönemler düzenlenmez, yenisi eklenir; yayındaki ilanlar onaylandıkları andaki dönemin kopyasını taşır, yeni dönemden etkilenmez." />
+
+@if (_errorMessage is not null)
+{
+    <Alert Variant="AlertVariant.Destructive" Class="mb-4">
+        <AlertDescription>@_errorMessage</AlertDescription>
+    </Alert>
+}
+
+@if (_infoMessage is not null)
+{
+    <Alert Class="mb-4">
+        <AlertDescription>@_infoMessage</AlertDescription>
+    </Alert>
+}
+
+<Card Class="table-card mb-4" data-testid="pricing-table">
+    @if (_isLoading)
+    {
+        <LoadingSkeleton />
+    }
+    else if (_periods is { Count: 0 })
+    {
+        <EmptyState Title="Dönem yok" Description="Başlangıç dönemi migration ile eklenir; aşağıdaki formdan yeni dönem ekleyebilirsiniz." />
+    }
+    else if (_periods is not null)
+    {
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Başlangıç</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead>Bütçe aralığı</TableHead>
+                    <TableHead>Teklif ücreti</TableHead>
+                    <TableHead Class="text-right">Günlük düşüş</TableHead>
+                    <TableHead Class="text-right">Teklif başı düşüş</TableHead>
+                    <TableHead>Not / Ekleyen</TableHead>
+                    <TableHead Class="text-right">İşlem</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                @foreach (var period in _periods)
+                {
+                    var state = StateOf(period);
+                    <TableRow Class="@(period.IsCurrent ? "row-current" : null)">
+                        <TableCell>@AdminFormat.DateTime(period.EffectiveFrom)</TableCell>
+                        <TableCell><StatusChip Status="@state" /></TableCell>
+                        <TableCell>@Try(period.BudgetMinTry) – @(period.BudgetMaxTry is { } max ? Try(max) : "Sınırsız")</TableCell>
+                        <TableCell>@Try(period.FeeMinTry) – @Try(period.FeeMaxTry)</TableCell>
+                        <TableCell Class="text-right">@AdminFormat.Percent(period.DailyDecayPct)</TableCell>
+                        <TableCell Class="text-right">@AdminFormat.Percent(period.PerOfferDecayPct)</TableCell>
+                        <TableCell Class="max-w-sm">
+                            @(period.Note ?? "—")
+                            <div class="muted">@(period.CreatedByName ?? "Sistem") · @AdminFormat.DateTime(period.CreatedAt)</div>
+                        </TableCell>
+                        <TableCell Class="cell-actions">
+                            <Button Variant="ButtonVariant.Outline" Size="ButtonSize.Sm" OnClick="() => ToggleDetail(period.Id)">
+                                @(_openId == period.Id ? "Kapat" : "Ağırlıklar")
+                            </Button>
+                        </TableCell>
+                    </TableRow>
+
+                    @if (_openId == period.Id)
+                    {
+                        <TableRow>
+                            <TableCell Class="detail-cell" colspan="8">
+                                <div class="detail-panel">
+                                    <dl class="detail-list">
+                                        <dt>Açıklama</dt>
+                                        <dd>@Weight(period.QualityWeights.Description) · tam puan ≥ @period.QualityWeights.DescriptionFullChars karakter</dd>
+                                        <dt>Başlık</dt>
+                                        <dd>@Weight(period.QualityWeights.Title) · tam puan ≥ @period.QualityWeights.TitleFullChars karakter</dd>
+                                        <dt>Bütçe</dt>
+                                        <dd>@Weight(period.QualityWeights.Budget) · tam puan üst bütçe ≥ @period.QualityWeights.BudgetFullMultiplier.ToString("0.##", AdminFormat.Turkish) × alt sınır</dd>
+                                        <dt>Konum</dt>
+                                        <dd>@Weight(period.QualityWeights.Location) · şehir girilmiş</dd>
+                                        <dt>Görüşme şekli</dt>
+                                        <dd>@Weight(period.QualityWeights.SessionBoth) · yüz yüze + online</dd>
+                                        <dt>Uzmanlık alanı</dt>
+                                        <dd>@Weight(period.QualityWeights.Specialization) · ≥ 2 alan (1 alan yarım puan)</dd>
+                                    </dl>
+                                    <div class="detail-actions">
+                                        <Button Size="ButtonSize.Sm" Variant="ButtonVariant.Outline" OnClick="() => CopyToForm(period)">Forma kopyala</Button>
+                                    </div>
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    }
+                }
+            </TableBody>
+        </Table>
+        <Pager Meta="_meta" Disabled="_isLoading" OnPageChanged="GoToPageAsync" />
+    }
+</Card>
+
+<Card Class="mb-4">
+    <CardHeader>
+        <CardTitle>Ücret nasıl hesaplanır?</CardTitle>
+    </CardHeader>
+    <CardContent>
+        <div class="stack-3">
+            <p class="help-text">
+                İlan admin onayından geçtiği anda bir <strong>kalite puanı</strong> (0–1) alır: aşağıdaki ağırlıklarla açıklama
+                uzunluğu, başlık uzunluğu, bütçe, şehir, görüşme şekli ve uzmanlık sayısı puanlanır (ağırlıklar toplamı 1'e
+                normalize edilir). Başlangıç ücreti bu puana göre ücret alt ve üst sınırı arasında belirlenir ve 10 TL'ye
+                yuvarlanır. Sonra her tam 24 saatte ve ilana gelen her yeni teklifte (geri çekilenler dahil) yüzde düşer; ücret
+                hiçbir zaman alt sınırın altına inmez.
+            </p>
+            <pre class="formula">başlangıç = ücret_alt + kalite × (ücret_üst − ücret_alt)            (10 TL'ye yuvarlanır)
+ücret     = max(ücret_alt, başlangıç × (1 − günlük%)^gün × (1 − teklif%)^teklif_sayısı)   (tam TL)</pre>
+            <p class="help-text">
+                Uzman yalnız o anki ücreti görür; bir sonraki düşüşün zamanı ya da tutarı hiçbir yerde gösterilmez.
+                Aşağıdaki önizleme tablosu yalnız admin içindir.
+            </p>
+        </div>
+    </CardContent>
+</Card>
+
+<Card Class="mb-4">
+    <CardHeader>
+        <CardTitle>Yeni dönem</CardTitle>
+        <CardDescription>Başlangıç boş bırakılırsa dönem hemen başlar. İleri bir tarih seçilirse o ana kadar mevcut dönem geçerli kalır.</CardDescription>
+    </CardHeader>
+    <CardContent>
+        <div class="stack-3">
+            <div class="form-grid">
+                <div class="field">
+                    <Label>Başlangıç (İstanbul saati)</Label>
+                    <Input Type="datetime-local" data-testid="pricing-effective-from" @bind-Value="_effectiveFrom" />
+                </div>
+                <div class="field">
+                    <Label>Bütçe alt sınırı (₺, seans başı)</Label>
+                    <Input Type="number" data-testid="pricing-budget-min" @bind-Value="_budgetMin" />
+                </div>
+                <div class="field">
+                    <Label>Bütçe üst sınırı (₺)</Label>
+                    <Input Type="number" data-testid="pricing-budget-max" Disabled="_budgetUnlimited" @bind-Value="_budgetMax" />
+                    <div class="switch-field">
+                        <Switch Checked="_budgetUnlimited" CheckedChanged="value => _budgetUnlimited = value" />
+                        <span>Sınırsız</span>
+                    </div>
+                </div>
+                <div class="field">
+                    <Label>Teklif ücreti alt sınırı (₺)</Label>
+                    <Input Type="number" data-testid="pricing-fee-min" @bind-Value="_feeMin" />
+                </div>
+                <div class="field">
+                    <Label>Teklif ücreti üst sınırı (₺)</Label>
+                    <Input Type="number" data-testid="pricing-fee-max" @bind-Value="_feeMax" />
+                </div>
+                <div class="field">
+                    <Label>Günlük düşüş (%)</Label>
+                    <Input data-testid="pricing-daily" @bind-Value="_dailyPct" />
+                </div>
+                <div class="field">
+                    <Label>Teklif başına düşüş (%)</Label>
+                    <Input data-testid="pricing-per-offer" @bind-Value="_perOfferPct" />
+                </div>
+            </div>
+
+            <h3 class="section-title">Kalite puanı ağırlıkları</h3>
+            <div class="form-grid">
+                <div class="field"><Label>Açıklama</Label><Input @bind-Value="_wDescription" /></div>
+                <div class="field"><Label>Başlık</Label><Input @bind-Value="_wTitle" /></div>
+                <div class="field"><Label>Bütçe</Label><Input @bind-Value="_wBudget" /></div>
+                <div class="field"><Label>Konum (şehir)</Label><Input @bind-Value="_wLocation" /></div>
+                <div class="field"><Label>Yüz yüze + online</Label><Input @bind-Value="_wSessionBoth" /></div>
+                <div class="field"><Label>Uzmanlık alanı</Label><Input @bind-Value="_wSpecialization" /></div>
+            </div>
+            <p class="help-text">Ağırlıklar oransaldır: toplamları 1 olmak zorunda değil, hesapta 1'e normalize edilir. En az biri sıfırdan büyük olmalı.</p>
+
+            <h3 class="section-title">Tam puan eşikleri</h3>
+            <div class="form-grid">
+                <div class="field"><Label>Açıklama (karakter, ≤ 2000)</Label><Input Type="number" @bind-Value="_descriptionFullChars" /></div>
+                <div class="field"><Label>Başlık (karakter, 11–100)</Label><Input Type="number" @bind-Value="_titleFullChars" /></div>
+                <div class="field"><Label>Bütçe çarpanı (× alt sınır, 1–100)</Label><Input @bind-Value="_budgetFullMultiplier" /></div>
+            </div>
+
+            <div class="field">
+                <Label>Not (isteğe bağlı, ≤ 500)</Label>
+                <Textarea Rows="2" data-testid="pricing-note" Placeholder="Kampanya dönemi, fiyat güncellemesi..." @bind-Value="_note" />
+            </div>
+
+            @if (FormError is { } formError)
+            {
+                <p class="field-error" data-testid="pricing-form-error">@formError</p>
+            }
+        </div>
+    </CardContent>
+    <CardFooter>
+        <div class="detail-actions">
+            <Button data-testid="pricing-save" Disabled="@(_isSaving || FormError is not null)" IsLoading="_isSaving" OnClick="AskCreate">Dönemi ekle</Button>
+            <Button Variant="ButtonVariant.Outline" OnClick="ResetFormToCurrent">Geçerli dönemle doldur</Button>
+        </div>
+    </CardFooter>
+</Card>
+
+<Card data-testid="pricing-preview">
+    <CardHeader>
+        <CardTitle>Önizleme hesaplayıcı</CardTitle>
+        <CardDescription>Örnek bir ilanın kalite puanını, başlangıç ücretini ve zamanla/tekliflerle ücretin nasıl düştüğünü gösterir. Kayıt yapmaz.</CardDescription>
+    </CardHeader>
+    <CardContent>
+        <div class="stack-3">
+            <div class="form-grid">
+                <div class="field">
+                    <Label>Başlık</Label>
+                    <Input data-testid="preview-title" Placeholder="İlan başlığı" @bind-Value="_pTitle" />
+                    <span class="muted">@(_pTitle?.Length ?? 0) karakter</span>
+                </div>
+                <div class="field">
+                    <Label>Üst bütçe (₺)</Label>
+                    <Input Type="number" data-testid="preview-budget" @bind-Value="_pBudgetMax" />
+                </div>
+                <div class="field">
+                    <Label>Şehir</Label>
+                    <Input Placeholder="Boş = şehir yok" @bind-Value="_pCity" />
+                </div>
+                <div class="field">
+                    <Label>Görüşme şekli</Label>
+                    <Select @bind-Value="_pSessionType">
+                        <option value="online">Online</option>
+                        <option value="yüz_yüze">Yüz yüze</option>
+                        <option value="yüz_yüze_online">Yüz yüze + online</option>
+                    </Select>
+                </div>
+                <div class="field">
+                    <Label>Uzmanlık alanı sayısı</Label>
+                    <Input Type="number" @bind-Value="_pSpecializationCount" />
+                </div>
+            </div>
+            <div class="field">
+                <Label>Açıklama</Label>
+                <Textarea Rows="3" Placeholder="İlan açıklaması" @bind-Value="_pDescription" />
+                <span class="muted">@(_pDescription?.Length ?? 0) karakter</span>
+            </div>
+            <div class="switch-field">
+                <Switch Checked="_previewWithForm" CheckedChanged="value => _previewWithForm = value" />
+                <span>Yukarıdaki formdaki (henüz kaydedilmemiş) dönemle hesapla — kapalıysa geçerli dönem kullanılır</span>
+            </div>
+            <div class="detail-actions">
+                <Button data-testid="preview-run" Disabled="_isPreviewing" IsLoading="_isPreviewing" OnClick="PreviewAsync">Hesapla</Button>
+            </div>
+
+            @if (_previewError is not null)
+            {
+                <p class="field-error">@_previewError</p>
+            }
+
+            @if (_preview is not null)
+            {
+                <div class="preview-figures" data-testid="preview-result">
+                    <div>
+                        <div class="stat-card-label">Kalite puanı</div>
+                        <div class="stat-card-value">@_preview.QualityScore.ToString("0.00", AdminFormat.Turkish)</div>
+                    </div>
+                    <div>
+                        <div class="stat-card-label">Başlangıç ücreti</div>
+                        <div class="stat-card-value" data-testid="preview-initial-fee">@_preview.InitialFeeLabel</div>
+                    </div>
+                    <div>
+                        <div class="stat-card-label">Alt / üst sınır</div>
+                        <div class="stat-card-value">@_preview.FeeMinLabel – @_preview.FeeMaxLabel</div>
+                    </div>
+                </div>
+
+                <dl class="detail-list">
+                    <dt>Açıklama</dt><dd>@Score(_preview.Breakdown.Description)</dd>
+                    <dt>Başlık</dt><dd>@Score(_preview.Breakdown.Title)</dd>
+                    <dt>Bütçe</dt><dd>@Score(_preview.Breakdown.Budget)</dd>
+                    <dt>Konum</dt><dd>@Score(_preview.Breakdown.Location)</dd>
+                    <dt>Görüşme şekli</dt><dd>@Score(_preview.Breakdown.SessionBoth)</dd>
+                    <dt>Uzmanlık alanı</dt><dd>@Score(_preview.Breakdown.Specialization)</dd>
+                </dl>
+
+                <h3 class="section-title">Ücret tablosu (onaydan sonra geçen gün × gelen teklif)</h3>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Gün</TableHead>
+                            @foreach (var offers in ScheduleOffers)
+                            {
+                                <TableHead Class="text-right">@offers teklif</TableHead>
+                            }
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        @foreach (var days in ScheduleDays)
+                        {
+                            <TableRow>
+                                <TableCell>@(days == 0 ? "Onay günü" : $"{days}. gün")</TableCell>
+                                @foreach (var offers in ScheduleOffers)
+                                {
+                                    <TableCell Class="text-right">@(_preview.Schedule.FirstOrDefault(step => step.Days == days && step.Offers == offers)?.FeeLabel ?? "—")</TableCell>
+                                }
+                            </TableRow>
+                        }
+                    </TableBody>
+                </Table>
+            }
+        </div>
+    </CardContent>
+</Card>
+
+<ConfirmDialog Open="_isConfirmOpen"
+               OpenChanged="value => _isConfirmOpen = value"
+               Title="Yeni fiyatlandırma dönemi"
+               Description="@ConfirmText"
+               ConfirmLabel="Dönemi ekle"
+               OnConfirm="CreateConfirmedAsync" />
+
+@code {
+    private const int PerPage = 20;
+
+    private IReadOnlyList<AdminPricingPeriodDto>? _periods;
+    private AdminPageMetaDto? _meta;
+    private int _page = 1;
+    private Guid? _openId;
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private bool _isConfirmOpen;
+    private string? _errorMessage;
+    private string? _infoMessage;
+    private bool _formFilled;
+
+    // Form (metin: Input bileşeni string bağlanır; doğrulama FormError'da)
+    private string _effectiveFrom = string.Empty;
+    private string _budgetMin = "500";
+    private string _budgetMax = string.Empty;
+    private bool _budgetUnlimited = true;
+    private string _feeMin = "250";
+    private string _feeMax = "1000";
+    private string _dailyPct = "10";
+    private string _perOfferPct = "10";
+    private string _wDescription = "0,30";
+    private string _wTitle = "0,10";
+    private string _wBudget = "0,25";
+    private string _wLocation = "0,15";
+    private string _wSessionBoth = "0,10";
+    private string _wSpecialization = "0,10";
+    private string _descriptionFullChars = "400";
+    private string _titleFullChars = "30";
+    private string _budgetFullMultiplier = "4";
+    private string _note = string.Empty;
+
+    // Önizleme
+    private string _pTitle = "Kaygı ve uyku sorunları için destek arıyorum";
+    private string _pDescription = string.Empty;
+    private string _pBudgetMax = "1500";
+    private string _pCity = "İstanbul";
+    private string _pSessionType = "yüz_yüze_online";
+    private string _pSpecializationCount = "2";
+    private bool _previewWithForm;
+    private bool _isPreviewing;
+    private string? _previewError;
+    private PricingPreviewResultDto? _preview;
+
+    private IEnumerable<int> ScheduleDays => _preview?.Schedule.Select(step => step.Days).Distinct().Order() ?? Enumerable.Empty<int>();
+
+    private IEnumerable<int> ScheduleOffers => _preview?.Schedule.Select(step => step.Offers).Distinct().Order() ?? Enumerable.Empty<int>();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _openId = null;
+        try
+        {
+            var result = await AdminClient.ListPricingPeriodsAsync(_page, PerPage, CancellationToken.None);
+            _periods = result.Value?.Data;
+            _meta = result.Value?.Meta;
+            _errorMessage = result.ErrorMessage;
+
+            // Form ilk açılışta geçerli dönemle dolar: yeni dönem çoğunlukla küçük bir değişikliktir.
+            if (!_formFilled && _periods?.FirstOrDefault(period => period.IsCurrent) is { } current)
+            {
+                CopyToForm(current, announce: false);
+                _formFilled = true;
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _page = page;
+        return LoadAsync();
+    }
+
+    private void ToggleDetail(Guid id) => _openId = _openId == id ? null : id;
+
+    private string StateOf(AdminPricingPeriodDto period)
+        => period.IsCurrent ? "current" : period.EffectiveFrom > Clock.GetUtcNow() ? "scheduled" : "past";
+
+    private void ResetFormToCurrent()
+    {
+        if (_periods?.FirstOrDefault(period => period.IsCurrent) is { } current)
+        {
+            CopyToForm(current);
+        }
+    }
+
+    private void CopyToForm(AdminPricingPeriodDto period) => CopyToForm(period, announce: true);
+
+    private void CopyToForm(AdminPricingPeriodDto period, bool announce)
+    {
+        _effectiveFrom = string.Empty;
+        _budgetMin = Int(period.BudgetMinTry);
+        _budgetUnlimited = period.BudgetMaxTry is null;
+        _budgetMax = period.BudgetMaxTry is { } max ? Int(max) : string.Empty;
+        _feeMin = Int(period.FeeMinTry);
+        _feeMax = Int(period.FeeMaxTry);
+        _dailyPct = Dec(period.DailyDecayPct);
+        _perOfferPct = Dec(period.PerOfferDecayPct);
+        var weights = period.QualityWeights;
+        _wDescription = Dec(weights.Description);
+        _wTitle = Dec(weights.Title);
+        _wBudget = Dec(weights.Budget);
+        _wLocation = Dec(weights.Location);
+        _wSessionBoth = Dec(weights.SessionBoth);
+        _wSpecialization = Dec(weights.Specialization);
+        _descriptionFullChars = Int(weights.DescriptionFullChars);
+        _titleFullChars = Int(weights.TitleFullChars);
+        _budgetFullMultiplier = Dec(weights.BudgetFullMultiplier);
+        _note = string.Empty;
+        if (announce)
+        {
+            _infoMessage = "Dönem değerleri forma kopyalandı. Değiştirip yeni dönem olarak ekleyebilirsiniz.";
+        }
+    }
+
+    // API'deki AdminPricingService.EnsureValid ile aynı kurallar: kullanıcı hatayı
+    // göndermeden görsün. Sunucu yine de son sözü söyler.
+    private string? FormError => BuildRequest(out var error) is null ? error : null;
+
+    private CreatePricingPeriodDto? BuildRequest(out string? error)
+    {
+        error = null;
+        DateTimeOffset? effectiveFrom = null;
+        if (!string.IsNullOrWhiteSpace(_effectiveFrom))
+        {
+            effectiveFrom = AdminFormat.ParseLocalDateTime(_effectiveFrom);
+            if (effectiveFrom is null)
+            {
+                error = "Başlangıç tarihi okunamadı.";
+                return null;
+            }
+
+            if (effectiveFrom < Clock.GetUtcNow().AddMinutes(-1))
+            {
+                error = "Başlangıç geçmişte olamaz; hemen başlatmak için boş bırakın.";
+                return null;
+            }
+        }
+
+        if (!TryInt(_budgetMin, out var budgetMin) || budgetMin <= 0)
+        {
+            error = "Bütçe alt sınırı pozitif tam sayı olmalı.";
+            return null;
+        }
+
+        int? budgetMax = null;
+        if (!_budgetUnlimited)
+        {
+            if (!TryInt(_budgetMax, out var max) || max < budgetMin)
+            {
+                error = "Bütçe üst sınırı alt sınırdan küçük olamaz (ya da Sınırsız seçin).";
+                return null;
+            }
+
+            budgetMax = max;
+        }
+
+        if (!TryInt(_feeMin, out var feeMin) || feeMin < 0)
+        {
+            error = "Teklif ücreti alt sınırı 0 ya da pozitif tam sayı olmalı.";
+            return null;
+        }
+
+        if (!TryInt(_feeMax, out var feeMax) || feeMax < feeMin)
+        {
+            error = "Teklif ücreti üst sınırı alt sınırdan küçük olamaz.";
+            return null;
+        }
+
+        if (!TryDec(_dailyPct, out var daily) || daily is < 0 or > 100
+            || !TryDec(_perOfferPct, out var perOffer) || perOffer is < 0 or > 100)
+        {
+            error = "Düşüş yüzdeleri 0 ile 100 arasında olmalı.";
+            return null;
+        }
+
+        if (!TryDec(_wDescription, out var wDescription) || !TryDec(_wTitle, out var wTitle)
+            || !TryDec(_wBudget, out var wBudget) || !TryDec(_wLocation, out var wLocation)
+            || !TryDec(_wSessionBoth, out var wSessionBoth) || !TryDec(_wSpecialization, out var wSpecialization)
+            || new[] { wDescription, wTitle, wBudget, wLocation, wSessionBoth, wSpecialization }.Any(weight => weight < 0))
+        {
+            error = "Ağırlıklar 0 ya da pozitif sayı olmalı (ör. 0,25).";
+            return null;
+        }
+
+        if (wDescription + wTitle + wBudget + wLocation + wSessionBoth + wSpecialization <= 0)
+        {
+            error = "En az bir ağırlık sıfırdan büyük olmalı.";
+            return null;
+        }
+
+        if (!TryInt(_descriptionFullChars, out var descriptionFull) || descriptionFull is <= 0 or > 2000)
+        {
+            error = "Açıklama eşiği 1–2000 karakter olmalı.";
+            return null;
+        }
+
+        if (!TryInt(_titleFullChars, out var titleFull) || titleFull is <= 10 or > 100)
+        {
+            error = "Başlık eşiği 11–100 karakter olmalı.";
+            return null;
+        }
+
+        if (!TryDec(_budgetFullMultiplier, out var budgetMultiplier) || budgetMultiplier is < 1 or > 100)
+        {
+            error = "Bütçe çarpanı 1–100 arasında olmalı.";
+            return null;
+        }
+
+        if (_note.Trim().Length > 500)
+        {
+            error = "Not en çok 500 karakter olabilir.";
+            return null;
+        }
+
+        return new CreatePricingPeriodDto(
+            effectiveFrom,
+            budgetMin,
+            budgetMax,
+            feeMin,
+            feeMax,
+            daily,
+            perOffer,
+            new QualityWeightsDto(
+                wDescription, wTitle, wBudget, wLocation, wSessionBoth, wSpecialization,
+                descriptionFull, titleFull, budgetMultiplier),
+            string.IsNullOrWhiteSpace(_note) ? null : _note.Trim());
+    }
+
+    private string ConfirmText
+    {
+        get
+        {
+            if (BuildRequest(out _) is not { } request)
+            {
+                return string.Empty;
+            }
+
+            var start = request.EffectiveFrom is { } at ? $"{AdminFormat.DateTime(at)} itibarıyla" : "hemen";
+            var budget = $"{Try(request.BudgetMinTry)} – {(request.BudgetMaxTry is { } max ? Try(max) : "sınırsız")}";
+            return $"Dönem {start} geçerli olacak. Bütçe {budget}, teklif ücreti {Try(request.FeeMinTry)} – {Try(request.FeeMaxTry)}, " +
+                $"günlük {AdminFormat.Percent(request.DailyDecayPct)}, teklif başı {AdminFormat.Percent(request.PerOfferDecayPct)} düşüş. " +
+                "Dönemler sonradan düzenlenemez; yayındaki ilanlar etkilenmez.";
+        }
+    }
+
+    private void AskCreate()
+    {
+        if (FormError is null)
+        {
+            _isConfirmOpen = true;
+        }
+    }
+
+    private async Task CreateConfirmedAsync()
+    {
+        _isConfirmOpen = false;
+        if (BuildRequest(out var error) is not { } request)
+        {
+            _errorMessage = error;
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = _infoMessage = null;
+        try
+        {
+            var result = await AdminClient.CreatePricingPeriodAsync(request, CancellationToken.None);
+            if (result.Value is not { } created)
+            {
+                _errorMessage = result.ErrorMessage;
+                return;
+            }
+
+            _infoMessage = created.IsCurrent
+                ? "Yeni dönem eklendi ve hemen geçerli oldu."
+                : $"Yeni dönem eklendi; {AdminFormat.DateTime(created.EffectiveFrom)} itibarıyla geçerli olacak.";
+            _page = 1;
+            await LoadAsync();
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task PreviewAsync()
+    {
+        _previewError = null;
+        CreatePricingPeriodDto? period = null;
+        if (_previewWithForm)
+        {
+            period = BuildRequest(out var formError);
+            if (period is null)
+            {
+                _previewError = $"Formdaki dönem geçersiz: {formError}";
+                return;
+            }
+        }
+
+        if (!TryDec(_pBudgetMax, out var budgetMax) || budgetMax < 0)
+        {
+            _previewError = "Üst bütçe sayı olmalı.";
+            return;
+        }
+
+        if (!TryInt(_pSpecializationCount, out var specializationCount) || specializationCount < 0)
+        {
+            _previewError = "Uzmanlık alanı sayısı 0 ya da pozitif olmalı.";
+            return;
+        }
+
+        _isPreviewing = true;
+        try
+        {
+            var request = new PricingPreviewRequestDto(
+                period,
+                new PricingPreviewListingDto(
+                    _pTitle,
+                    _pDescription,
+                    budgetMax,
+                    string.IsNullOrWhiteSpace(_pCity) ? null : _pCity.Trim(),
+                    _pSessionType,
+                    specializationCount));
+            var result = await AdminClient.PreviewPricingAsync(request, CancellationToken.None);
+            _preview = result.Value;
+            _previewError = result.ErrorMessage;
+        }
+        finally
+        {
+            _isPreviewing = false;
+        }
+    }
+
+    private static bool TryInt(string value, out int result)
+        => int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
+
+    // Hem "0,25" hem "0.25" kabul edilir: Türkçe klavye virgül, kopyalanan değer nokta getirebilir.
+    private static bool TryDec(string value, out decimal result)
+        => decimal.TryParse(value?.Trim().Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out result);
+
+    private static string Int(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static string Dec(decimal value) => value.ToString("0.####", AdminFormat.Turkish);
+
+    private static string Try(int value) => $"₺{value.ToString("N0", AdminFormat.Turkish)}";
+
+    private static string Weight(decimal value) => $"ağırlık {value.ToString("0.##", AdminFormat.Turkish)}";
+
+    private static string Score(decimal value) => $"{(value * 100).ToString("0", AdminFormat.Turkish)} / 100";
+}

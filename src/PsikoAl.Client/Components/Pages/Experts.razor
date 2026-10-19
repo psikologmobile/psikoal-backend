@@ -91,9 +91,9 @@
                                         <TabsList>
                                             <TabsTrigger Value="profile">Profil</TabsTrigger>
                                             <TabsTrigger Value="documents">Belgeler</TabsTrigger>
-                                            @if (CanManageCredits)
+                                            @if (CanManageWallet)
                                             {
-                                                <TabsTrigger Value="credits">Krediler</TabsTrigger>
+                                                <TabsTrigger Value="wallet">Cüzdan</TabsTrigger>
                                             }
                                         </TabsList>
 
@@ -158,10 +158,10 @@
                                                 }
                                             </div>
                                         </TabsContent>
-                                        @if (CanManageCredits)
+                                        @if (CanManageWallet)
                                         {
-                                            <TabsContent Value="credits">
-                                                <ExpertCreditPanel ExpertId="expert.Id" />
+                                            <TabsContent Value="wallet">
+                                                <ExpertWalletPanel ExpertId="expert.Id" />
                                             </TabsContent>
                                         }
                                     </Tabs>
@@ -215,8 +215,8 @@
     private bool _isRejectDialogOpen;
     private Guid? _pendingRejectExpertId;
 
-    // Kredi uçları finans politikasında: moderatör sekmeyi görmez (uç zaten 403 döner).
-    private bool CanManageCredits => Session.CanAccess(AdminRoleGroups.Finance);
+    // Cüzdan uçları finans politikasında: moderatör sekmeyi görmez (uç zaten 403 döner).
+    private bool CanManageWallet => Session.CanAccess(AdminRoleGroups.Finance);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
