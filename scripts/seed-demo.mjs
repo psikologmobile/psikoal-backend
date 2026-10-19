@@ -672,7 +672,7 @@ async function main() {
       label: `${accepted.expert.firstName} ile eşleşti`,
       body: { offerId: accepted.id },
     })
-    if (match.ok) matchId = match.data.matchId ?? null
+    if (match.ok) matchId = match.data.data?.matchId ?? null
   }
 
   // --- 8. Yorum → moderasyon -----------------------------------------------
