@@ -58,6 +58,7 @@ güncellenir. Otomatik deploy açık olsaydı API, migration'dan önce canlıya 
    | psikoal-api | `PayTR__OkUrl` | Web sitesinin ödeme başarılı sayfası, ör. `https://psikoal.com/bakiye/basarili` |
    | psikoal-api | `PayTR__FailUrl` | Web sitesinin ödeme başarısız sayfası, ör. `https://psikoal.com/bakiye/hata` |
    | psikoal-api | `Site__PublicUrl` | Web sitesinin kök adresi, ör. `https://psikoal.com` — uzman davet linki `/davet/<kod>` bundan üretilir |
+   | psikoal-api | `Cors__AllowedOrigins` | Web sitesinin kökenleri, virgülle: ör. `https://psikoal-web.onrender.com,https://psikoal.com,https://www.psikoal.com` (sonda `/` yok, `*` kabul edilmez — geçersiz değer API'yi başlatmaz). Boşsa tarayıcıdan API çağrısı düşer; mobil uygulama ve PayTR callback'i etkilenmez |
 
    PayTR anahtarları boşsa API çalışır, yalnız bakiye yükleme uçları
    `PAYMENT_PROVIDER_UNAVAILABLE` döner. PayTR panel ayarları (Bildirim URL'si dahil):
@@ -67,6 +68,10 @@ güncellenir. Otomatik deploy açık olsaydı API, migration'dan önce canlıya 
 3. Her iki servis için Settings → **Deploy Hook** URL'sini kopyala (GitHub sırrı olacak).
 4. Özel alan adı bağlanacaksa (ör. `api.psikoal.com`, `admin.psikoal.com`) Render → Custom
    Domains; sonra mobil uygulamanın `EXPO_PUBLIC_API_URL`'i ve panelin `Api__BaseUrl`'i bu adrese çevrilir.
+5. Web sitesi (`psikoal-web`, uygulama reposundaki `render.yaml` ve `docs/DEPLOY-WEB.md`)
+   yayına alınınca adresini `Cors__AllowedOrigins`'e ekle; `PayTR__OkUrl` /
+   `PayTR__FailUrl` / `Site__PublicUrl` aynı adrese göre güncellenir. Alan adı
+   değiştiğinde dördü birlikte değişir.
 
 ### 3. GitHub
 

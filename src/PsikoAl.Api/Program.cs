@@ -215,6 +215,8 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new UtcDateTimeOffsetJsonConverter()));
 builder.Services.AddConfiguredForwardedHeaders(builder.Configuration);
+// Web sitesi (ayrı köken) API'yi tarayıcıdan çağırır; izinli kökenler Cors:AllowedOrigins.
+builder.Services.AddConfiguredCors();
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: [ReadinessTag]);
 builder.Services.AddProblemDetails();
@@ -231,6 +233,9 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+// Kimlik doğrulamadan ve rate limit'ten ÖNCE: preflight (OPTIONS) token taşımaz, burada
+// yanıtlanır. Origin göndermeyen istemciler (mobil uygulama, PayTR callback) etkilenmez.
+app.UseCors(CorsSetup.PolicyName);
 app.UseAuthentication();
 app.UseMiddleware<AccountStatusMiddleware>();
 app.UseRateLimiter();

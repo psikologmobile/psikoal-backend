@@ -57,6 +57,12 @@ services:
       # Web sitesinin kök adresi: uzman davet linki ${Site__PublicUrl}/davet/<kod> (REVIZE-2 §2.2).
       - key: Site__PublicUrl
         sync: false
+      # Web sitesinin (psikoal-web static site) tarayıcıdan API çağırabileceği kökenler:
+      # virgülle ayrılmış tam adresler, sonda "/" yok, joker yok. Ör.
+      # https://psikoal-web.onrender.com,https://psikoal.com,https://www.psikoal.com
+      # Boşsa tarayıcıdan gelen hiçbir köken izinli değildir (mobil uygulama etkilenmez).
+      - key: Cors__AllowedOrigins
+        sync: false
 
   - type: web
     name: psikoal-admin
