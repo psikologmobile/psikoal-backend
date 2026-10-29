@@ -243,7 +243,7 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# --- PsikoAl: Türkçe auth e-posta şablonları -------------------------------
+# --- Psikosirius: Türkçe auth e-posta şablonları -------------------------------
 #
 # Varsayılan GoTrue şablonları İngilizcedir ("Reset your password", "Confirm
 # your signup"). Uygulamanın tamamı Türkçe olduğu için kullanıcı akışın
@@ -257,19 +257,19 @@ otp_expiry = 3600
 # okunmaz, config'den gelir.
 
 [auth.email.template.recovery]
-subject = "PsikoAl — şifre sıfırlama"
+subject = "Psikosirius — şifre sıfırlama"
 content_path = "./supabase/templates/recovery.html"
 
 [auth.email.template.confirmation]
-subject = "PsikoAl — e-posta adresinizi doğrulayın"
+subject = "Psikosirius — e-posta adresinizi doğrulayın"
 content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.email_change]
-subject = "PsikoAl — e-posta değişikliği onayı"
+subject = "Psikosirius — e-posta değişikliği onayı"
 content_path = "./supabase/templates/email_change.html"
 
 [auth.email.template.magic_link]
-subject = "PsikoAl — giriş bağlantınız"
+subject = "Psikosirius — giriş bağlantınız"
 content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize email template

@@ -33,5 +33,5 @@ public static class AdminNavigation
         return Items.FirstOrDefault(item => string.Equals(item.Href, normalized, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static string TitleFor(string relativePath) => Find(relativePath)?.Label ?? "PsikoAl Admin";
+    public static string TitleFor(string relativePath) => Find(relativePath)?.Label ?? "Psikosirius Admin";
 }

@@ -1,4 +1,4 @@
-# PsikoAl API — Render (runtime: docker) ve lokal `docker build` için.
+# Psikosirius API — Render (runtime: docker) ve lokal `docker build` için.
 # Build bağlamı REPO KÖKÜDÜR:  docker build -f src/PsikoAl.Api/Dockerfile .
 #
 # SDK etiketi global.json ile aynı özellik bandına sabit: `sdk:10.0` kayan etiketi yeni bir
