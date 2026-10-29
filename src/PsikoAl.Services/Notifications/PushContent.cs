@@ -13,7 +13,7 @@ namespace PsikoAl.Services.Notifications;
 /// </remarks>
 public static class PushContent
 {
-    private static readonly (string Title, string Body) Fallback = ("PsikoAl", "Yeni bir bildiriminiz var.");
+    private static readonly (string Title, string Body) Fallback = ("Psikosirius", "Yeni bir bildiriminiz var.");
 
     private static readonly Dictionary<string, (string Title, string Body)> GenericTexts = new(StringComparer.Ordinal)
     {

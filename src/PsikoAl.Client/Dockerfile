@@ -1,4 +1,4 @@
-# PsikoAl Admin Paneli (Blazor Server) — Render (runtime: docker) ve lokal `docker build` için.
+# Psikosirius Admin Paneli (Blazor Server) — Render (runtime: docker) ve lokal `docker build` için.
 # Build bağlamı REPO KÖKÜDÜR:  docker build -f src/PsikoAl.Client/Dockerfile .
 #
 # SDK etiketi neden sabit: bkz. src/PsikoAl.Api/Dockerfile.

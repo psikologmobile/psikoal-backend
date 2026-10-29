@@ -8,5 +8,5 @@ public sealed class BrevoOptions
 
     public string SenderEmail { get; set; } = "no-reply@psikoal.com";
 
-    public string SenderName { get; set; } = "PsikoAl";
+    public string SenderName { get; set; } = "Psikosirius";
 }

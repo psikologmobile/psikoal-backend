@@ -14,7 +14,7 @@ public sealed class PayTrClientTests
         "PA0123ABC",
         "uzman@example.test",
         50000,
-        [new PayTrBasketItem("PsikoAl bakiye yükleme (₺500)", 500m, 1)],
+        [new PayTrBasketItem("Psikosirius bakiye yükleme (₺500)", 500m, 1)],
         "Ayşe Yılmaz",
         "İstanbul",
         "05551112233");
