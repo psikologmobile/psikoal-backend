@@ -84,7 +84,7 @@ public sealed class WalletPaymentService(
                 payment.MerchantOid,
                 profile.Email,
                 checked((int)amountKurus),
-                [new PayTrBasketItem($"PsikoAl bakiye yükleme ({MoneyLabel.Try(amountKurus)})", amountTry, 1)],
+                [new PayTrBasketItem($"Psikosirius bakiye yükleme ({MoneyLabel.Try(amountKurus)})", amountTry, 1)],
                 $"{profile.FirstName} {profile.LastName}".Trim(),
                 string.IsNullOrWhiteSpace(profile.City) ? FallbackAddress : profile.City,
                 string.IsNullOrWhiteSpace(profile.Phone) ? FallbackPhone : profile.Phone),
